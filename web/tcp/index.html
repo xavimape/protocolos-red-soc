@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TCP — Protocolos SOC</title>
+  <meta name="description" content="TCP: three-way handshake, SYN Flood, Port Scanning, TCP Hijacking y cómo detectarlos en un SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #4488ff; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub"><span class="back-arrow">←</span> <span data-i18n="nav.back">Inicio</span></a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>TCP</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">3</div>
+        <div>
+          <div class="module-title">TCP</div>
+          <div class="module-subtitle" data-i18n="tcp.subtitle">Transmission Control Protocol · TCP/any · Capa de Transporte</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('tcp','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('tcp','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('tcp','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('tcp','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: Three-Way Handshake -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="tcp.demo.handshake.title">Simulador TCP Handshake</span>
+            <span class="badge badge-info">TCP/3-way</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="tcp.demo.src.label">IP Origen (Cliente):</label>
+              <input type="text" id="tcp-src" value="192.168.1.100" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="tcp.demo.dst.label">IP Destino (Servidor):</label>
+              <input type="text" id="tcp-dst" value="93.184.216.34" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="tcp.demo.port.label">Puerto destino:</label>
+              <select id="tcp-port">
+                <option value="80">80 — HTTP</option>
+                <option value="443" selected>443 — HTTPS</option>
+                <option value="22">22 — SSH</option>
+                <option value="3389">3389 — RDP</option>
+                <option value="445">445 — SMB</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="tcpDemo.runHandshake()" data-i18n="tcp.demo.btn.handshake">▶ Simular Handshake</button>
+              <button class="btn btn-secondary" onclick="tcpDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="tcp.demo.output.title">Flujo de paquetes</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="tcp-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="tcp.demo.waiting">Esperando simulación TCP...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: SYN Flood -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tcp.demo.synflood.title">⚠️ Demo: SYN Flood (DDoS)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tcp.demo.synflood.desc">El atacante envía miles de SYN con IPs spoofed. El servidor reserva recursos esperando el ACK que nunca llega, agotando la tabla de conexiones semi-abiertas.</p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.synflood.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.synflood.target">IP víctima:</label>
+                <input type="text" id="syn-target" value="10.0.0.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.synflood.rate">Paquetes/segundo:</label>
+                <select id="syn-rate">
+                  <option value="100">100 pps — bajo</option>
+                  <option value="1000" selected data-i18n="tcp.opt1">1,000 pps — medio</option>
+                  <option value="10000" data-i18n="tcp.opt2">10,000 pps — alto</option>
+                  <option value="100000" data-i18n="tcp.opt3">100,000 pps — saturación</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tcpDemo.runSYNFlood()" data-i18n="tcp.demo.btn.synflood">▶ Simular SYN Flood</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.synflood.state">Estado del servidor víctima</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="syn-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="tcp.demo.waiting">Esperando simulación TCP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: Port Scan -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tcp.demo.portscan.title">🔍 Demo: Port Scanning (nmap-style)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tcp.demo.portscan.desc">El atacante envía SYN a múltiples puertos. Un puerto abierto responde SYN-ACK; uno cerrado responde RST; uno filtrado no responde.</p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.portscan.panel">Configurar escaneo</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.portscan.target">IP objetivo:</label>
+                <input type="text" id="scan-target" value="192.168.1.50" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.portscan.range">Rango de puertos:</label>
+                <select id="scan-range">
+                  <option value="top20" selected data-i18n="tcp.opt4">Top 20 puertos comunes</option>
+                  <option value="top100" data-i18n="tcp.opt5">Top 100 puertos</option>
+                  <option value="1-1024">1–1024 (well-known)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tcpDemo.runPortScan()" data-i18n="tcp.demo.btn.scan">▶ Iniciar Escaneo</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.portscan.results">Resultados del escaneo</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="scan-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="tcp.demo.waiting">Esperando simulación TCP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 4: RST Injection -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tcp.demo.rst.title">⚡ Demo: TCP RST Injection</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tcp.demo.rst.desc">
+          El atacante envía un paquete RST forjado para desconectar forzosamente una sesión TCP activa.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="tcp.demo.rst.panel.conn">🔗 Conexión TCP activa</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.rst.label.src">IP Víctima:</label>
+                <input type="text" id="rst-src" value="192.168.1.100" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.rst.label.dst">IP Servidor:</label>
+                <input type="text" id="rst-dst" value="10.10.10.50" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tcpDemo.runRSTInjection()" data-i18n="tcp.demo.rst.btn">💀 Inyectar RST</button>
+                <button class="btn btn-secondary" onclick="tcpDemo.resetRST()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="tcp.demo.rst.panel.log">🔍 Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="rst-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 5: TCP Session Hijacking -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tcp.demo.hijack.title">👤 Demo: TCP Session Hijacking</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tcp.demo.hijack.desc">
+          El atacante predice números SEQ/ACK para inyectar datos en una sesión TCP activa.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="tcp.demo.hijack.panel.seq">🔢 Análisis SEQ/ACK</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.hijack.label.seq">SEQ número actual:</label>
+                <input type="number" id="hijack-seq" value="48291" min="1" max="4294967295" />
+              </div>
+              <div style="margin-top:0.75rem;font-size:0.78rem;color:var(--text-muted);">
+                <p style="margin-bottom:0.4rem;" data-i18n="tcp.predlabel">Ejemplos de predicción:</p>
+                <div style="display:flex;flex-wrap:wrap;gap:0.35rem;">
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('hijack-seq').value=48291">SEQ incremental bajo</button>
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('hijack-seq').value=3851246712">SEQ alto (difícil)</button>
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('hijack-seq').value=1">SEQ=1 (pésimo ISN)</button>
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top:1rem;">
+                <button class="btn btn-primary" onclick="tcpDemo.runHijack()" data-i18n="tcp.demo.hijack.btn">🎯 Simular Hijacking</button>
+                <button class="btn btn-secondary" onclick="tcpDemo.resetHijack()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="tcp.demo.hijack.panel.log">💀 Secuencia de hijacking</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="hijack-output" style="min-height:220px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 6: ACK Flood -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tcp.demo.ack.title">⚡ Demo: ACK Flood DoS</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tcp.demo.ack.desc">
+          Inundación de paquetes ACK con IPs spoofed. El servidor gasta CPU verificando cada ACK contra su tabla de conexiones.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.ack.panel">Configurar ACK Flood</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.ack.target">IP objetivo:</label>
+                <input type="text" id="ack-target" value="10.0.0.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.ack.rate">Tasa de paquetes/s:</label>
+                <select id="ack-rate">
+                  <option value="10000" data-i18n="tcp.opt6">10,000 pkt/s (bajo)</option>
+                  <option value="100000" selected data-i18n="tcp.opt7">100,000 pkt/s (medio)</option>
+                  <option value="1000000" data-i18n="tcp.opt8">1,000,000 pkt/s (alto)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tcpDemo.runACKFlood()" data-i18n="tcp.demo.ack.btn">▶ Simular ACK Flood</button>
+                <button class="btn btn-secondary" onclick="tcpDemo.resetACK()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.ack.result">Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="ack-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 7: TCP Spoofing -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tcp.demo.spoof.title">🎭 Demo: TCP IP Spoofing</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tcp.demo.spoof.desc">
+          Falsificación de la IP origen en paquetes TCP. Permite inyectar datos en sesiones activas, realizar ataques blind, o combinarse con ARP poisoning para MitM.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.spoof.panel">Configurar TCP Spoofing</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.spoof.src">IP a suplantar (origen falso):</label>
+                <input type="text" id="spoof-src" value="192.168.1.100" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.spoof.target">IP objetivo:</label>
+                <input type="text" id="spoof-target" value="10.0.0.5" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tcp.demo.spoof.type">Técnica:</label>
+                <select id="spoof-type">
+                  <option value="blind" selected>Blind TCP Spoofing (ISN prediction)</option>
+                  <option value="mitm">MitM + ARP Poisoning</option>
+                  <option value="reset">Session Reset via RST</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tcpDemo.runTCPSpoof()" data-i18n="tcp.demo.spoof.btn">▶ Simular TCP Spoofing</button>
+                <button class="btn btn-secondary" onclick="tcpDemo.resetSpoof()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tcp.demo.spoof.result">Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="spoof-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="tcp-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 10</span>
+          <h2 data-i18n="tcp.slide1.title">¿Qué es TCP?</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide1.sub">El protocolo de transporte confiable de Internet</p>
+          <p data-i18n="tcp.slide1.p1">TCP (Transmission Control Protocol) es el protocolo de capa de transporte que garantiza entrega ordenada, sin errores y sin duplicados de datos entre dos hosts. Opera sobre IP y es la base de HTTP, HTTPS, SSH, SMTP, FTP y la mayoría de los protocolos de aplicación.</p>
+          <div class="callout">
+            <strong data-i18n="tcp.slide1.callout.title">Características clave de TCP:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="tcp.slide1.f1">🔗 <strong>Orientado a conexión</strong> — requiere establecer conexión antes de enviar datos (3-way handshake)</li>
+              <li data-i18n="tcp.slide1.f2">✅ <strong>Entrega garantizada</strong> — ACK por cada segmento; retransmite si no hay confirmación</li>
+              <li data-i18n="tcp.slide1.f3">📋 <strong>Ordenamiento</strong> — sequence numbers aseguran que los datos lleguen en orden</li>
+              <li data-i18n="tcp.slide1.f4">🚦 <strong>Control de flujo</strong> — sliding window evita saturar al receptor</li>
+              <li data-i18n="tcp.slide1.f5">🔧 <strong>Control de congestión</strong> — slow start, AIMD, CUBIC</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 10</span>
+          <h2 data-i18n="tcp.slide2.title">El Three-Way Handshake</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide2.sub">Cómo se establece una conexión TCP</p>
+          <pre data-i18n="tcp.pre0">
+Cliente (192.168.1.100)          Servidor (93.184.216.34:443)
+       │                                    │
+       │──── SYN (seq=1000) ───────────────►│  [1] Cliente inicia
+       │                                    │      SYN_SENT
+       │◄─── SYN-ACK (seq=5000, ack=1001) ─│  [2] Servidor confirma
+       │                                    │      SYN_RECEIVED
+       │──── ACK (ack=5001) ───────────────►│  [3] Conexión establecida
+       │                                    │      ESTABLISHED
+       │════════ DATA TRANSFER ═════════════│
+       │                                    │
+       │──── FIN ──────────────────────────►│  [4] Cierre (4-way)
+       │◄─── ACK ───────────────────────────│
+       │◄─── FIN ───────────────────────────│
+       │──── ACK ──────────────────────────►│  CLOSED</pre>
+          <div class="callout" data-i18n="tcp.slide2.callout">
+            <strong>Flags TCP:</strong> SYN (sync), ACK (acknowledge), FIN (finish), RST (reset), PSH (push), URG (urgent). La combinación de flags en cada paquete indica el estado de la conexión.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 10</span>
+          <h2 data-i18n="tcp.slide3.title">Cabecera TCP</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide3.sub">Campos relevantes para análisis en SOC</p>
+          <pre data-i18n="tcp.pre1">
+ 0      7 8     15 16    23 24    31
+┌────────────────┬────────────────┐
+│  Source Port   │   Dest Port    │  ← identifica la aplicación
+├────────────────────────────────┤
+│         Sequence Number        │  ← posición en el flujo
+├────────────────────────────────┤
+│       Acknowledgment Number    │  ← próximo byte esperado
+├────────┬───────┬───────────────┤
+│DataOff │Reserv │  Flags        │  ← SYN ACK FIN RST PSH URG
+├────────────────┬───────────────┤
+│  Window Size   │   Checksum    │
+└────────────────┴───────────────┘</pre>
+          <div class="callout warning">
+            <strong data-i18n="tcp.slide3.callout.title">Campos de interés en SOC:</strong>
+            <ul style="margin-top:0.4rem;">
+              <li data-i18n="tcp.slide3.c1">Window Size 0 → RST programado o intento de denegación</li>
+              <li data-i18n="tcp.slide3.c2">Sequence numbers fuera de orden → posible hijacking o retransmisión</li>
+              <li data-i18n="tcp.slide3.c3">Solo SYN sin ACK → SYN Flood o port scan en curso</li>
+              <li data-i18n="tcp.slide3.c4">Flags inválidas (SYN+FIN, NULL) → escaneo evasivo (Xmas scan, NULL scan)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 10</span>
+          <h2 data-i18n="tcp.slide4.title">Ataque 1: SYN Flood</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide4.sub">El DDoS clásico de capa de transporte</p>
+          <p data-i18n="tcp.slide4.p1">El atacante envía una ráfaga de paquetes SYN con IPs de origen falsificadas (spoofed). El servidor reserva recursos para cada "conexión" semi-abierta en la Transmission Control Block (TCB) table y espera el ACK final que nunca llega.</p>
+          <div class="callout danger">
+            <strong data-i18n="tcp.slide4.impact.title">Impacto:</strong>
+            <ul style="margin-top:0.4rem;">
+              <li data-i18n="tcp.slide4.i1">La TCB table se satura → el servidor rechaza conexiones legítimas</li>
+              <li data-i18n="tcp.slide4.i2">Denegación de servicio efectiva con relativamente poco ancho de banda del atacante</li>
+              <li data-i18n="tcp.slide4.i3">Las IPs spoofed dificultan el bloqueo por origen</li>
+            </ul>
+          </div>
+          <p data-i18n="tcp.slide4.mitigation"><strong>Mitigación:</strong> SYN cookies (el servidor no reserva estado hasta recibir ACK), rate limiting de SYN por IP, firewall stateful, scrubbing centers.</p>
+          <p style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.001</strong> — Direct Network Flood</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 10</span>
+          <h2 data-i18n="tcp.slide5.title">Ataque 2: Port Scanning</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide5.sub">Reconocimiento de servicios expuestos</p>
+          <p data-i18n="tcp.slide5.p1">El atacante envía paquetes TCP a múltiples puertos para identificar servicios activos. Los distintos tipos de scan son detectables con patrones de flags:</p>
+          <ul>
+            <li data-i18n="tcp.slide5.s1"><strong>SYN scan (-sS)</strong>: envía SYN, espera SYN-ACK (abierto) o RST (cerrado). Más sigiloso: no completa el handshake.</li>
+            <li data-i18n="tcp.slide5.s2"><strong>Connect scan (-sT)</strong>: completa el handshake. Queda en logs de la aplicación.</li>
+            <li data-i18n="tcp.slide5.s3"><strong>NULL scan (-sN)</strong>: envía paquete sin flags. Abierto→ no responde, Cerrado→ RST.</li>
+            <li data-i18n="tcp.slide5.s4"><strong>Xmas scan (-sX)</strong>: SYN+FIN+URG+PSH. Mismo comportamiento que NULL.</li>
+            <li data-i18n="tcp.slide5.s5"><strong>FIN scan (-sF)</strong>: solo FIN. Evasión de algunos firewalls stateless.</li>
+          </ul>
+          <div class="callout warning">
+            <strong data-i18n="tcp.slide5.ioc">IOC en logs:</strong> una IP enviando SYN a más de 15–20 puertos distintos en &lt;1 minuto = port scan casi seguro.
+          </div>
+          <p style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1046</strong> — Network Service Discovery</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 10</span>
+          <h2 data-i18n="tcp.slide6.title">Ataque 3: TCP Session Hijacking</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide6.sub">Robo de una sesión TCP activa</p>
+          <p data-i18n="tcp.slide6.p1">El atacante en posición MITM intercepta una sesión TCP activa y la toma control inyectando paquetes con los sequence numbers correctos. Pasos:</p>
+          <ol style="margin-top:0.5rem;margin-left:1.2rem;line-height:2;">
+            <li data-i18n="tcp.slide6.s1">Sniff del tráfico TCP para obtener seq/ack numbers actuales</li>
+            <li data-i18n="tcp.slide6.s2">Inyectar paquetes con src=víctima, seq=esperado → el servidor lo acepta</li>
+            <li data-i18n="tcp.slide6.s3">Desincronizar al cliente legítimo (RST o desynch de sequence)</li>
+            <li data-i18n="tcp.slide6.s4">El atacante tiene control total de la sesión</li>
+          </ol>
+          <div class="callout danger">
+            <strong data-i18n="tcp.slide6.callout">Señal en SOC:</strong> RST inesperados en conexiones activas, retransmisiones anómalas, cambio de sequence numbers sin causa de red.
+          </div>
+          <p style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1557</strong> — Adversary-in-the-Middle</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 10</span>
+          <h2 data-i18n="tcp.slide7.title">TCP en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide7.sub">Zeek conn.log + Suricata + NetFlow</p>
+          <pre data-i18n="tcp.pre2">
+# Zeek conn.log — conexión normal HTTPS
+ts=10:01:05  orig=192.168.1.100:51234  resp=93.184.216.34:443
+proto=tcp  state=SF  orig_bytes=1240  resp_bytes=8920
+conn_state: S0=sin ACK · SF=normal · REJ=rechazada · RSTO=RST origen
+
+# Zeek — posible SYN Flood (muchos S0 al mismo destino)
+ts=10:05:00  state=S0  orig=1.2.3.4:random  resp=10.0.0.1:443
+ts=10:05:00  state=S0  orig=5.6.7.8:random  resp=10.0.0.1:443
+... × 10.000 en 1 segundo
+
+# Zeek — port scan (un origen, muchos destinos/puertos)
+10:10:01  orig=192.168.99.200  resp=192.168.1.1:22   S0
+10:10:01  orig=192.168.99.200  resp=192.168.1.1:80   S0
+10:10:01  orig=192.168.99.200  resp=192.168.1.1:443  SF  ← abierto
+10:10:01  orig=192.168.99.200  resp=192.168.1.1:3389 S0
+
+# Suricata — SYN Flood detection
+alert tcp any any -> $HOME_NET any (
+  msg:"ET DOS TCP SYN Flood";
+  flags:S,12; flow:stateless;
+  threshold: type both, track by_dst, count 1000, seconds 1;
+  classtype:denial-of-service; sid:2100200;)</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 10</span>
+          <h2 data-i18n="tcp.slide8.title">Detección y mitigación</h2>
+          <p class="slide-subtitle" data-i18n="tcp.slide8.sub">Resumen operativo para SOC</p>
+          <ul>
+            <li>🛡️ <strong data-i18n="tcp.slide8.m1.title">SYN Cookies</strong> <span data-i18n="tcp.slide8.m1.desc">— el kernel no reserva TCB hasta recibir ACK válido. Activo por defecto en Linux.</span></li>
+            <li>🔥 <strong data-i18n="tcp.slide8.m2.title">Firewall Stateful</strong> <span data-i18n="tcp.slide8.m2.desc">— solo permite paquetes que pertenecen a una conexión establecida.</span></li>
+            <li>⏱️ <strong data-i18n="tcp.slide8.m3.title">Rate Limiting SYN</strong> <span data-i18n="tcp.slide8.m3.desc">— iptables/nftables: máx N SYN/s por IP de origen.</span></li>
+            <li>🕵️ <strong data-i18n="tcp.slide8.m4.title">IDS signatures</strong> <span data-i18n="tcp.slide8.m4.desc">— Suricata detecta NULL/Xmas scans por combinación de flags inválidas.</span></li>
+            <li>📊 <strong data-i18n="tcp.slide8.m5.title">NetFlow / IPFIX</strong> <span data-i18n="tcp.slide8.m5.desc">— baseline de conexiones TCP por destino; anomalías → alerta SIEM.</span></li>
+            <li>🚫 <strong data-i18n="tcp.slide8.m6.title">Blackholing / Scrubbing</strong> <span data-i18n="tcp.slide8.m6.desc">— durante DDoS volumétrico, desviar tráfico a centros de limpieza.</span></li>
+          </ul>
+          <div class="callout">
+            <strong data-i18n="tcp.slide8.sigma.title">Regla Sigma — Port Scan Detection:</strong><br>
+            <code>selection: conn_state: "S0" AND unique_dst_ports > 20 AND timeframe: 60s</code><br>
+            <code>groupby: src_ip</code>
+          </div>
+        </div>
+
+      
+
+        <div class="slide">
+          <span class="slide-number">9 / 10</span>
+          <h2 data-i18n="tcp.s9.title">Ataque 5: ACK Flood DoS</h2>
+          <p class="slide-subtitle" data-i18n="tcp.s9.sub">Saturar la tabla de estados TCP con paquetes ACK espurios</p>
+          <p data-i18n="tcp.s9.p1">El ACK Flood envía millones de paquetes ACK con IPs spoofed y números de secuencia aleatorios. El servidor debe buscar cada ACK en su tabla de conexiones para determinar si pertenece a una sesión válida. Con suficiente volumen, la CPU se satura procesando paquetes inválidos.</p>
+          <pre data-i18n="tcp.pre3">
+MECANISMO:
+  - Paquetes ACK válidos: el servidor los procesa rápido (sesión conocida)
+  - Paquetes ACK inválidos: el servidor responde con RST → doble gasto de CPU
+  - Sin sesión previa → el firewall stateful debe verificar cada uno
+  - Volumétrico: fácil de amplificar con botnet
+
+COMANDO (hping3):
+  hping3 -A --rand-source --flood -p 80 10.0.0.1
+  # -A    = flag ACK activado
+  # --rand-source = IP origen aleatoria (spoofed)
+  # --flood = máxima velocidad posible
+
+VS SYN FLOOD:
+  SYN Flood: crea half-open connections, agota tabla TCP
+  ACK Flood: no crea estado, pero fuerza búsquedas en tabla
+  ACK Flood es más difícil de filtrar (ACK es tráfico normal de vuelta)
+
+DETECCIÓN:
+  Zeek: paquetes ACK sin SYN previo correspondiente
+  iptables: -m state --state ESTABLISHED → bloquear ACK sin estado
+  Netflow: ratio ACK/SYN anómalo (>>1 en condiciones normales es ok, >>100 es sospechoso)
+  SIEM: alerta en tasa de RST responses desde el servidor
+
+MITIGACIÓN:
+  Rate limiting en ACK sin conexión establecida
+  SYN cookies + connection tracking en firewall
+  Anycast + scrubbing center ante ataques volumétricos</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.001</strong> — Direct Network Flood</p>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">10 / 10</span>
+          <h2 data-i18n="tcp.s10.title">Ataque 6: TCP IP Spoofing</h2>
+          <p class="slide-subtitle" data-i18n="tcp.s10.sub">Falsificar la IP origen para hacerse pasar por otro host</p>
+          <p data-i18n="tcp.s10.p1">IP Spoofing en TCP consiste en forjar la dirección IP origen de los paquetes. En redes modernas es difícil para ataques bidireccionales (no se recibe la respuesta), pero se combina con ARP poisoning para MitM, o se usa en ataques blind para inyectar datos o resetear conexiones.</p>
+          <pre data-i18n="tcp.pre4">
+TIPOS DE TCP SPOOFING:
+
+1. BLIND SPOOFING (sin respuesta visible):
+   - El atacante no ve la respuesta del target
+   - Debe predecir el ISN (Initial Sequence Number)
+   - Requiere silenciar la IP suplantada (iptables DROP)
+   - scapy: send(IP(src="victim",dst="target")/TCP(flags="S",seq=ISN_guess))
+
+2. MitM + ARP POISONING (con respuesta visible):
+   - ARP Poisoning redirige el tráfico a través del atacante
+   - El atacante ve las respuestas → spoofing bidireccional
+   - Permite inyectar comandos en sesiones Telnet, HTTP no cifrado
+   - arpspoof + scapy/inject para modificar tráfico en-vuelo
+
+3. SESSION RESET:
+   - Sniffar SEQ number de una sesión activa
+   - Enviar RST con IP spoofed y SEQ dentro de la ventana
+   - Termina la conexión sin ser parte de ella (ver RST Injection)
+
+HERRAMIENTAS:
+  scapy:    send(IP(src="1.2.3.4",dst="5.6.7.8")/TCP(flags="S"))
+  hping3:   hping3 --spoof 1.2.3.4 -S -p 80 5.6.7.8
+  tcpkill:  terminar conexiones TCP activas en la red local
+
+DETECCIÓN:
+  uRPF (Unicast Reverse Path Forwarding): bloquea IPs con ruta asimétrica
+  Ingress filtering (BCP38): ISPs deben filtrar paquetes con IPs propias
+  ARP inspection dinámica: detecta ARP poisoning
+  Zeek: conn.log — IPs que no corresponden a la MAC registrada</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1557</strong> — Adversary-in-the-Middle · <strong>T1499</strong> — Endpoint Denial of Service</p>
+        </div>
+
+      </div><!-- /slides-container -->
+<div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej1.title">Handshake o no — ¿cuándo no llega el ACK?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej1.q">En Zeek conn.log el campo <code>conn_state</code> puede ser: <code>S0</code>, <code>S1</code>, <code>SF</code>, <code>REJ</code>, <code>RSTO</code>, <code>RSTR</code>. Explicá qué significa cada uno y cuál/cuáles indican un posible ataque.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej1.ans"></div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej2.title">Identificar tipo de port scan por flags</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej2.q">El IDS capturó estos paquetes de la misma IP origen hacia distintos puertos. Identificá el tipo de scan y su propósito:</p>
+            <pre>
+Paquete A: Flags=SYN
+Paquete B: Flags=FIN+URG+PSH
+Paquete C: Flags=(ninguno)
+Paquete D: Flags=FIN
+Paquete E: Flags=SYN+ACK</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej2.ans"></div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej3.title">Análisis de SYN Flood en NetFlow</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej3.q">El SIEM reporta lo siguiente en un período de 30 segundos. ¿Qué está pasando y cómo respondés?</p>
+            <pre>
+src_ip=VARIED(8500 distintas)   dst_ip=10.0.0.5   dst_port=443
+proto=TCP   flags=SYN   bytes_per_flow=60
+flows_per_second=8500   total_flows=255000
+bandwidth=40.8 Mbps   conn_state=S0 (100%)</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej3.ans"></div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej4.title">¿Por qué RST en una sesión establecida?</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej4.q">Un analista ve en Zeek que una sesión SSH establecida (ESTABLISHED) recibe un RST inesperado a los 12 segundos. La sesión termina con conn_state=RSTR. El usuario reporta que su sesión SSH se "cae sola". Lista las causas posibles, de más benigna a más sospechosa.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej4.ans"></div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej5.title">Escribir regla Suricata — NULL/Xmas scan</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej5.q">Escribí reglas Suricata para detectar: (1) NULL scan, (2) Xmas scan, (3) FIN scan. Explicá por qué necesitás <code>flow:stateless</code> en estas reglas.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej5.ans"></div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="tcp.challenge.title">Incidente #TCP-001: "El servidor web que no responde"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="tcp.challenge.context">Las 3 AM. Alertas en cascada: el servidor web público (10.0.0.10) tiene latencia de 15 segundos y está rechazando ~90% de las conexiones nuevas. El NOC ve picos de CPU en el kernel. Datos del SIEM:</p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="tcp.pre7">
+NetFlow últimos 60s → dst=10.0.0.10:80
+  src_ips:  14,200 distintas
+  avg_pkt_size: 64 bytes
+  flags: SYN (99.8%)
+  conn_state S0: 98%
+  bandwidth: 109 Mbps
+
+iptables -nL → SYN cookies: DISABLED
+ulimit TCP backlog: 128 (default)
+CPU softirq: 94% (procesando paquetes TCP)</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="tcp.challenge.q">¿Qué hacés en los próximos 10 minutos?</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box" data-i18n="tcp.challenge.ans"></div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-06</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej6.title">ACK Flood: ¿cómo difiere del SYN Flood?</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej6.q">Explicá las diferencias técnicas entre SYN Flood y ACK Flood. ¿Por qué los SYN cookies no mitigan el ACK Flood? ¿Qué recurso del servidor atacan respectivamente? ¿Cómo detectarías un ACK Flood en Zeek conn.log? ¿Qué regla Sigma escribirías?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej6.ans">
+DIFERENCIAS TÉCNICAS:
+  SYN Flood: paquetes con flag SYN → llena la SYN backlog (half-open connections)
+  ACK Flood: paquetes con flag ACK → el kernel procesa cada ACK buscando la sesión → CPU
+
+POR QUÉ SYN COOKIES NO AYUDAN:
+  SYN cookies resuelven el problema del backlog (SYN Flood)
+  Los ACK packets pasan directo al TCP stack → el kernel gasta CPU buscando la conexión
+  No hay backlog que proteger — el ataque es volumétrico puro
+
+RECURSO ATACADO:
+  SYN Flood → memoria (backlog de half-open connections)
+  ACK Flood → CPU (interrupt handling, softirq, TCP state lookup)
+
+DETECCIÓN EN ZEEK conn.log:
+  Buscar: proto=tcp, conn_state=S0 (ACKs sin sesión previa)
+  alto volumen de paquetes con RST inmediato del servidor
+
+REGLA SIGMA:
+  selection:
+    proto: tcp
+    tcp_flags|contains: 'A'   # ACK flag
+    conn_state: 'RSTO'        # RST desde origin (sin sesión)
+  condition: selection | count() by dst_ip > 10000 | timeframe: 10s
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-07</span>
+            <span class="ejercicio-title" data-i18n="tcp.ej7.title">TCP Spoofing: blind vs. non-blind</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tcp.ej7.q">¿Cuál es la diferencia entre TCP Spoofing ciego y no-ciego? ¿Por qué los ISNs (Initial Sequence Numbers) aleatorios dificultan el ataque? ¿Qué condición de red se necesita para el ataque no-ciego? ¿Cómo se usa TCP Spoofing para inyectar RST y terminar sesiones BGP?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="tcp.ej7.ans">
+BLIND TCP SPOOFING:
+  El atacante NO está en el path (no puede ver las respuestas)
+  Necesita adivinar el ISN (Initial Sequence Number) del servidor
+  Históricamente posible cuando los ISNs eran predecibles (e.g. incrementos fijos)
+  Hoy: RFC 6528 → ISNs aleatorios → ataque prácticamente inviable
+
+NON-BLIND TCP SPOOFING:
+  El atacante ESTÁ en el path (MitM, mismo segmento de red)
+  Puede ver las respuestas → conoce los sequence numbers reales
+  Permite: inyectar datos, RST injection, session hijacking
+
+ISN RANDOMIZATION (RFC 6528):
+  ISN = F(secreto, src_ip, dst_ip, src_port, dst_port, timestamp)
+  Sin adivinar el ISN correcto, el TCP stack ignora el paquete spoofed
+
+RST INJECTION vs BGP:
+  BGP usa TCP puerto 179 con sesiones de larga duración (horas/días)
+  Atacante envía RST con src=routerA, dst=routerB, window matching
+  Si el seq number cae en la ventana → la sesión BGP cae → routing disruption
+  Caso real: CVE-2004-0230 — RST injection contra sesiones BGP
+  Mitigación: TCP MD5 (RFC 2385), GTSM (RFC 5082), filtros BCP38
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /ejercicios-list -->
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 9293 — Transmission Control Protocol (2022)</h4>
+          <p data-i18n="tcp.rec.rfc9293">Especificación oficial actualizada de TCP. Consolida RFC 793 y todas sus actualizaciones.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc9293" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc9293</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">IETF</div>
+          <h4>RFC 4987 — TCP SYN Flooding Attacks and Common Mitigations</h4>
+          <p data-i18n="tcp.rec.rfc4987">Documento de referencia para entender SYN Flood y SYN cookies a nivel técnico.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc4987" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc4987</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.nsm">Herramienta · NSM</div>
+          <h4>Zeek — conn.log</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Port scan detection
+cat conn.log | zeek-cut id.orig_h id.resp_p conn_state \
+  | awk '$3=="S0"' | sort | uniq -c | sort -rn | head -20
+
+# SYN Flood: many S0 to same dst
+zeek-cut id.resp_h conn_state < conn.log \
+  | awk '$2=="S0"' | sort | uniq -c | sort -rn</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.scan">Herramienta · Scan</div>
+          <h4>nmap — defensive reference</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">nmap -sS target       # SYN scan (fast, no completion)
+nmap -sT target       # Connect scan (completes handshake)
+nmap -sN target       # NULL scan
+nmap -sX target       # Xmas scan
+nmap -sF target       # FIN scan
+nmap -p 1-65535 target # full port range</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.sysctl">Herramienta · Sysctl</div>
+          <h4>TCP Hardening on Linux</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">sysctl net.ipv4.tcp_syncookies=1
+sysctl net.ipv4.tcp_max_syn_backlog=4096
+sysctl net.ipv4.tcp_synack_retries=1
+sysctl net.ipv4.tcp_fin_timeout=15
+# Persist in /etc/sysctl.conf</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.capture">Herramienta · Captura</div>
+          <h4>tcpdump — useful TCP filters</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">tcpdump 'tcp[tcpflags] == tcp-syn'        # SYN only
+tcpdump 'tcp[tcpflags] == 0'             # NULL scan
+tcpdump 'tcp[tcpflags] & (tcp-fin|tcp-push|tcp-urg) == 7' # Xmas
+tcpdump 'tcp[tcpflags] & tcp-rst != 0'  # RST packets</pre>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet TCP para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr><th data-i18n="cheat.signal">Señal en logs</th><th data-i18n="cheat.attack">Posible ataque</th><th data-i18n="cheat.action">Acción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="tcp.cheat.r1.sig">Miles de S0 hacia mismo dst</td><td data-i18n="tcp.cheat.r1.att">SYN Flood DDoS</td><td data-i18n="tcp.cheat.r1.act">SYN cookies, rate limit, ISP blackhole</td></tr>
+            <tr><td data-i18n="tcp.cheat.r2.sig">Un src → muchos dst_ports (S0/REJ)</td><td data-i18n="tcp.cheat.r2.att">Port Scanning</td><td data-i18n="tcp.cheat.r2.act">Alertar, bloquear IP, revisar si hay acceso posterior</td></tr>
+            <tr><td data-i18n="tcp.cheat.r3.sig">Flags=0 (NULL) desde src externo</td><td data-i18n="tcp.cheat.r3.att">NULL Scan</td><td data-i18n="tcp.cheat.r3.act">Bloquear, alertar</td></tr>
+            <tr><td data-i18n="tcp.cheat.r4.sig">Flags=FIN+PSH+URG (Xmas)</td><td data-i18n="tcp.cheat.r4.att">Xmas Scan</td><td data-i18n="tcp.cheat.r4.act">Bloquear, alertar</td></tr>
+            <tr><td data-i18n="tcp.cheat.r5.sig">RST inesperado en sesión ESTABLISHED</td><td data-i18n="tcp.cheat.r5.att">TCP Hijacking / RST injection</td><td data-i18n="tcp.cheat.r5.act">PCAP inmediato, verificar origen del RST</td></tr>
+            <tr><td data-i18n="tcp.cheat.r6.sig">Seq numbers fuera de secuencia</td><td data-i18n="tcp.cheat.r6.att">Session hijacking</td><td data-i18n="tcp.cheat.r6.act">Cortar sesión, investigar</td></tr>
+            <tr><td data-i18n="tcp.cheat.r7.sig">CPU softirq alta + latencia TCP</td><td data-i18n="tcp.cheat.r7.att">SYN Flood en curso</td><td data-i18n="tcp.cheat.r7.act">SYN cookies, ajustar backlog</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cves">⚡ CVEs Relevantes</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.high">CVE · Alto</div>
+          <h4>CVE-2004-0230 — TCP RST Injection</h4>
+          <p data-i18n="tcp.rec.cve2004">Vulnerabilidad en la ventana TCP que permite terminar sesiones BGP via RST spoofed. CVSS 5.0. Afectó a todos los routers con BGP.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2004-0230" target="_blank" rel="noopener">→ NVD CVE-2004-0230</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2018-5390 — SegmentSmack (Linux)</h4>
+          <p data-i18n="tcp.rec.cve2018">DoS en el stack TCP de Linux via paquetes especialmente crafteados. O(n²) en el procesamiento de segmentos. CVSS 7.5.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2018-5390" target="_blank" rel="noopener">→ NVD CVE-2018-5390</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.high">CVE · Alto</div>
+          <h4>CVE-2020-11901 — Ripple20 (TCP/IP stacks)</h4>
+          <p data-i18n="tcp.rec.cve2020">Vulnerabilidades en stacks TCP/IP embebidos (Treck). Afectó millones de dispositivos IoT, médicos e industriales.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2020-11901" target="_blank" rel="noopener">→ NVD CVE-2020-11901</a>
+        </div>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Labs y Referencias</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1498 — Network Denial of Service</h4>
+          <p data-i18n="tcp.rec.t1498">SYN Flood, ACK Flood y variantes de DoS a nivel de red.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1498/" target="_blank" rel="noopener">→ attack.mitre.org/T1498</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1046 — Network Service Discovery</h4>
+          <p data-i18n="tcp.rec.t1046">Port scanning y reconocimiento de servicios. Técnica de pre-ataque muy común.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1046/" target="_blank" rel="noopener">→ attack.mitre.org/T1046</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1557 — Adversary-in-the-Middle</h4>
+          <p data-i18n="tcp.rec.t1557">Session hijacking y TCP spoofing en ataques MitM. Incluye técnicas de inyección de tráfico.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1557/" target="_blank" rel="noopener">→ attack.mitre.org/T1557</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">TryHackMe</div>
+          <h4>Nmap Room — Port Scanning Techniques</h4>
+          <p data-i18n="tcp.rec.thm">Laboratorio práctico de todos los tipos de scan TCP (SYN, NULL, Xmas, FIN) y evasión de firewalls.</p>
+          <a class="recurso-link" href="https://tryhackme.com/room/furthernmap" target="_blank" rel="noopener">→ tryhackme.com/room/furthernmap</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="../http/index.html">← HTTP</a>
+        <a href="../index.html">Hub</a>
+        <a href="../udp/index.html">UDP →</a>
+      </div>
+      <p data-i18n="footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-tcp.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('tcp-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('tcp', 'demo');
+    });
+  </script>
+</body>
+</html>

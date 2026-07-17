@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TLS — Protocolos SOC</title>
+  <meta name="description" content="TLS: handshake, certificados, ataques POODLE/BEAST/Heartbleed, JA3 fingerprinting y detección en SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #ff44aa; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub"><span class="back-arrow">←</span> <span data-i18n="nav.back">Inicio</span></a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>TLS</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">9</div>
+        <div>
+          <div class="module-title">TLS / SSL</div>
+          <div class="module-subtitle" data-i18n="tls.subtitle">Transport Layer Security · TCP subyacente · Capa de Sesión</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('tls','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('tls','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('tls','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('tls','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: TLS Handshake -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="tls.demo.handshake.title">TLS Handshake — Negociación de cifrado</span>
+            <span class="badge badge-success">TLS 1.3</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="tls.demo.handshake.host">Dominio / servidor:</label>
+              <input type="text" id="tls-host" value="www.banco.com" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="tls.demo.handshake.version">Versión TLS:</label>
+              <select id="tls-version">
+                <option value="1.3" selected data-i18n="tls.opt1">TLS 1.3 (recomendado)</option>
+                <option value="1.2" data-i18n="tls.opt2">TLS 1.2 (aceptable)</option>
+                <option value="1.1">TLS 1.1 (DEPRECATED ⚠)</option>
+                <option value="1.0" data-i18n="tls.opt3">TLS 1.0 (ROTO ✖)</option>
+                <option value="ssl3" data-i18n="tls.opt4">SSLv3 (ROTO — POODLE ✖)</option>
+              </select>
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="tls.demo.handshake.cert">Tipo de certificado:</label>
+              <select id="tls-cert">
+                <option value="valid" selected data-i18n="tls.opt5">Válido (CA reconocida, no expirado)</option>
+                <option value="expired" data-i18n="tls.opt6">Expirado</option>
+                <option value="selfsigned" data-i18n="tls.opt7">Autofirmado</option>
+                <option value="mismatch" data-i18n="tls.opt8">Mismatch de hostname</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="tlsDemo.runHandshake()" data-i18n="tls.demo.btn.handshake">▶ Simular handshake TLS</button>
+              <button class="btn btn-secondary" onclick="tlsDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="tls.demo.handshake.output">Mensajes TLS</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="tls-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="tls.demo.waiting">Esperando simulación TLS...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: Ataques TLS -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tls.demo.attack.title">⚔️ Demo: Ataques contra TLS</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tls.demo.attack.desc">
+          TLS tiene una larga historia de vulnerabilidades. Muchas dependen de versiones antiguas (SSLv3, TLS 1.0), cipher suites débiles, o errores de implementación como Heartbleed.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tls.demo.attack.panel">Seleccionar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tls.demo.attack.type">Ataque:</label>
+                <select id="tls-attack">
+                  <option value="poodle" selected data-i18n="tls.opt9">POODLE — Downgrade a SSLv3 (CVE-2014-3566)</option>
+                  <option value="heartbleed" data-i18n="tls.opt10">Heartbleed — Lectura de memoria (CVE-2014-0160)</option>
+                  <option value="downgrade">Downgrade attack — DROWN / FREAK</option>
+                  <option value="cipher">Weak cipher suite — RC4 / 3DES / NULL</option>
+                  <option value="beast">BEAST — CBC padding oracle (TLS 1.0)</option>
+                  <option value="crime" data-i18n="tls.opt11">CRIME / BREACH — compresión + oráculo</option>
+                  <option value="sweet32" data-i18n="tls.opt12">SWEET32 — birthday attack en 3DES</option>
+                  <option value="reneg">SSL Renegotiation attack (CVE-2009-3555)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="tls.demo.attack.target">Objetivo:</label>
+                <input type="text" id="tls-atk-target" value="vulnerable-server.empresa.com" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tlsDemo.runAttack()" data-i18n="tls.demo.btn.attack">▶ Simular ataque</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tls.demo.attack.output">Análisis del ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="tls-atk-output" style="min-height:200px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="tls.demo.waiting">Esperando simulación TLS...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: JA3 Fingerprinting -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="tls.demo.ja3.title">🔍 Demo: JA3 Fingerprinting — Identificar clientes TLS</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="tls.demo.ja3.desc">
+          JA3 es una técnica de fingerprinting que identifica el cliente TLS (browser, malware, herramienta) por los valores del ClientHello. Los C2 maliciosos tienen JA3 conocidos — se puede usar para detección sin ver el contenido cifrado.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tls.demo.ja3.panel">Simular ClientHello</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="tls.demo.ja3.client">Tipo de cliente:</label>
+                <select id="ja3-client">
+                  <option value="chrome" selected data-i18n="tls.opt13">Chrome / Firefox (legítimo)</option>
+                  <option value="curl" data-i18n="tls.opt14">curl / requests (herramienta)</option>
+                  <option value="cobalt">Cobalt Strike (C2 framework)</option>
+                  <option value="malware" data-i18n="tls.opt15">Malware genérico (cipher mínimo)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="tlsDemo.runJA3()" data-i18n="tls.demo.btn.ja3">▶ Generar JA3</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="tls.demo.ja3.output">JA3 fingerprint</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="ja3-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="tls.demo.waiting">Esperando simulación TLS...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="tls-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 12</span>
+          <h2 data-i18n="tls.s1.title">¿Qué es TLS?</h2>
+          <p class="slide-subtitle" data-i18n="tls.s1.sub">La capa de seguridad que protege HTTPS, SMTP, IMAP y más</p>
+          <p data-i18n="tls.s1.p1">TLS (Transport Layer Security) es el protocolo criptográfico que proporciona privacidad e integridad a las comunicaciones en Internet. Es el "S" en HTTPS. Reemplazó a SSL (Secure Sockets Layer), aunque coloquialmente todavía se dice "SSL".</p>
+          <div class="callout success">
+            <strong data-i18n="tls.s1.provides.title">TLS proporciona tres garantías:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="tls.s1.p_c">🔒 <strong>Confidencialidad</strong> — los datos van cifrados, nadie puede leerlos en tránsito</li>
+              <li data-i18n="tls.s1.p_i">✅ <strong>Integridad</strong> — cualquier modificación del tráfico es detectable (MAC/AEAD)</li>
+              <li data-i18n="tls.s1.p_a">🏛️ <strong>Autenticación</strong> — certificados X.509 prueban la identidad del servidor (y opcionalmente del cliente)</li>
+            </ul>
+          </div>
+          <div class="cheatsheet-table-wrap" style="margin-top:1rem;">
+            <table class="cheatsheet-table">
+              <thead><tr><th data-i18n="tls.s1.col.v">Versión</th><th data-i18n="tls.s1.col.s">Estado</th><th data-i18n="tls.s1.col.n">Nota</th></tr></thead>
+              <tbody>
+                <tr><td>SSLv2</td><td data-i18n="tls.ver.v2s">❌ ROTO</td><td data-i18n="tls.ver.v2n">Retirado 1996 — múltiples vulnerabilidades críticas</td></tr>
+                <tr><td>SSLv3</td><td data-i18n="tls.ver.v3s">❌ ROTO</td><td data-i18n="tls.ver.v3n">POODLE (2014) — no usar</td></tr>
+                <tr><td>TLS 1.0</td><td>❌ DEPRECATED</td><td data-i18n="tls.ver.v10n">BEAST, CRIME, LUCKY13 — RFC 8996 lo retira</td></tr>
+                <tr><td>TLS 1.1</td><td>❌ DEPRECATED</td><td data-i18n="tls.ver.v11n">RFC 8996 — retirado junto a 1.0</td></tr>
+                <tr><td>TLS 1.2</td><td data-i18n="tls.ver.v12s">⚠ ACEPTABLE</td><td data-i18n="tls.ver.v12n">OK con cipher suites seguras, sin RC4/3DES</td></tr>
+                <tr><td>TLS 1.3</td><td data-i18n="tls.ver.v13s">✅ RECOMENDADO</td><td data-i18n="tls.ver.v13n">Diseño limpio, forward secrecy obligatorio, más rápido</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 12</span>
+          <h2 data-i18n="tls.s2.title">El TLS Handshake (1.2 vs 1.3)</h2>
+          <p class="slide-subtitle" data-i18n="tls.s2.sub">Negociación de versión, cipher suite y autenticación</p>
+          <pre data-i18n="tls.pre0">
+TLS 1.2 — 2 round-trips (4 mensajes):
+  Cliente → Servidor: ClientHello
+    - Versiones soportadas, cipher suites soportadas
+    - Random (32 bytes)
+    - Session ID, extensiones (SNI, ALPN...)
+
+  Servidor → Cliente: ServerHello + Certificate + ServerHelloDone
+    - Versión y cipher suite elegida
+    - Random del servidor
+    - Certificado X.509 del servidor
+
+  Cliente → Servidor: ClientKeyExchange + ChangeCipherSpec + Finished
+    - Clave pre-master (RSA) o parámetros DH
+    - ¡Ahora el canal está cifrado!
+
+  Servidor → Cliente: ChangeCipherSpec + Finished
+    - Handshake completo
+
+TLS 1.3 — 1 round-trip (más rápido):
+  Cliente → Servidor: ClientHello
+    + KeyShare (ya incluye parámetros DH)
+    + SupportedVersions, SignatureAlgorithms
+    ↳ El cliente "apuesta" por el grupo DH más probable
+
+  Servidor → Cliente: ServerHello + {EncryptedExtensions + Certificate +
+                                    CertificateVerify + Finished}
+    - Todo lo que sigue ya va cifrado
+    - El servidor acepta el KeyShare del cliente o pide otro
+
+  Cliente → Servidor: {Finished}   ← 1 RT completo
+
+VENTAJAS DE TLS 1.3:
+  - 0-RTT para conexiones repetidas (con caveats de replay)
+  - Forward secrecy OBLIGATORIA (ECDHE siempre)
+  - Cipher suites simplificadas (sin exportkeys, sin RC4, sin CBC)
+  - El handshake mismo está parcialmente cifrado</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 12</span>
+          <h2 data-i18n="tls.s3.title">Certificados X.509 y PKI</h2>
+          <p class="slide-subtitle" data-i18n="tls.s3.sub">La cadena de confianza detrás del candado verde</p>
+          <pre data-i18n="tls.pre1">
+CADENA DE CERTIFICADOS:
+  Root CA (autoconfiado, preinstalado en OS/browser)
+    └─ Intermediate CA (firmado por Root CA)
+          └─ Leaf Certificate (firmado por Intermediate)
+               www.banco.com — válido, no expirado, para este hostname
+
+CAMPOS IMPORTANTES DE UN CERTIFICADO:
+  Subject:          CN=www.banco.com, O=Banco SA, C=AR
+  Subject Alt Names: DNS:www.banco.com, DNS:banco.com
+  Issuer:           CN=DigiCert TLS RSA SHA256 2020 CA1
+  Valid From:       2024-01-01 00:00:00
+  Valid To:         2025-01-01 23:59:59
+  Public Key:       EC 256 bits (P-256)
+  Signature:        sha256WithRSAEncryption
+  Serial:           0A:1B:2C:3D...
+
+TIPOS DE CERTIFICADOS:
+  DV (Domain Validation) — solo verifica control del dominio
+    → La mayoría de HTTPS modernos, incluyendo Let's Encrypt
+  OV (Organization Validation) — verifica la organización también
+  EV (Extended Validation) — verificación rigurosa, muestra nombre org
+    → Banca, gobierno — aunque los browsers ya no lo destacan visualmente
+
+ERRORES DE CERTIFICADO (IOC en SOC):
+  NET::ERR_CERT_DATE_INVALID   — certificado expirado
+  NET::ERR_CERT_AUTHORITY_INVALID — CA no reconocida (posible MitM / interceptor)
+  NET::ERR_CERT_COMMON_NAME_INVALID — hostname no coincide con el cert
+  SEC_ERROR_REUSED_ISSUER_AND_SERIAL — certificado revocado</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 12</span>
+          <h2 data-i18n="tls.s4.title">Ataque 1: POODLE — Downgrade a SSLv3</h2>
+          <p class="slide-subtitle" data-i18n="tls.s4.sub">CVE-2014-3566 — Padding Oracle On Downgraded Legacy Encryption</p>
+          <p data-i18n="tls.s4.p1">POODLE explota que muchos servidores en 2014 todavía soportaban SSLv3 como fallback. El atacante (MitM) fuerza un downgrade de TLS a SSLv3 y luego explota una debilidad de padding en CBC para descifrar cookies de sesión.</p>
+          <pre data-i18n="tls.pre2">
+FLUJO DEL ATAQUE POODLE:
+
+1. DOWNGRADE:
+   Atacante (MitM) interfiere el handshake TLS 1.2
+   Hace fallar la negociación → cliente y servidor caen a SSLv3
+   (muchos clientes tenían "retry con versión inferior" automático)
+
+2. PADDING ORACLE EN CBC:
+   SSLv3 usa CBC con padding débil:
+   - El padding es predecible y no autenticado
+   - El atacante puede modificar bytes del ciphertext
+   - Observa si el servidor acepta o rechaza el padding
+   - 256 intentos por byte → extrae 1 byte del texto claro
+   - Cookie de 16 bytes = ~4000 requests
+
+3. RESULTADO:
+   El atacante descifra la cookie de sesión HTTP
+   Puede impersonar al usuario sin necesidad de contraseña
+
+MITIGACIÓN:
+  → Deshabilitar SSLv3 y TLS 1.0/1.1 en el servidor
+  → TLS_FALLBACK_SCSV: nuevo cipher suite que señala al servidor
+    que el cliente está en modo fallback → el servidor rechaza el downgrade
+
+ESTADO ACTUAL:
+  Todos los browsers modernos deshabilitaron SSLv3 en 2014-2015
+  POODLE es histórico pero importante para entender downgrade attacks</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVE-2014-3566 · MITRE ATT&CK: <strong>T1573</strong> — Encrypted Channel</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 12</span>
+          <h2 data-i18n="tls.s5.title">Ataque 2: Heartbleed</h2>
+          <p class="slide-subtitle" data-i18n="tls.s5.sub">CVE-2014-0160 — el bug que leyó la memoria de Internet</p>
+          <p data-i18n="tls.s5.p1">Heartbleed fue un bug catastrófico en OpenSSL que permitía a cualquier atacante leer hasta 64KB de la memoria del proceso servidor por request — sin autenticación y sin dejar rastro en los logs normales.</p>
+          <pre data-i18n="tls.pre3">
+EL BUG:
+  TLS tiene una extensión "heartbeat": el cliente envía "PING" con un payload
+  y el servidor debe responder con el mismo payload (keep-alive de conexión).
+
+  El cliente especifica la longitud del payload en el mensaje:
+  [Heartbeat Request: length=64000, data="A" (1 byte)]
+
+  OpenSSL vulnerable confiaba en la longitud declarada:
+  memcpy(respuesta, buffer, 64000)  ← lee 64KB sin verificar!
+  → Copia 64KB del heap de OpenSSL en la respuesta
+
+  Eso incluye: claves privadas TLS, contraseñas de usuarios,
+               tokens de sesión, datos de otros clientes, etc.
+
+IMPACTO:
+  → ~17% de los servidores HTTPS del mundo en 2014
+  → Yahoo, Imgur, OKCupid, LastPass, Wikipedia afectados
+  → Un atacante podía robar la clave privada del certificado:
+    → Podía descifrar TODO el tráfico pasado (si fue capturado)
+    → Podía impersonar el servidor ante usuarios
+
+CÓMO DETECTARLO (retrospectivo):
+  → Logs de acceso: muchas requests a /heartbeat o requests TLS inusualmente
+    grandes desde misma IP
+  → IDS/Zeek: reglas para heartbeat con length != data_length
+
+ESTADO:
+  Parcheado en OpenSSL 1.0.1g (7 abril 2014)
+  Hoy: todos los servidores parcheados
+  LECCIÓN: las implementaciones de TLS tienen bugs, no solo el protocolo</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVE-2014-0160 · Solo afecta OpenSSL 1.0.1-1.0.1f</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 12</span>
+          <h2 data-i18n="tls.s6.title">MitM con certificado falso</h2>
+          <p class="slide-subtitle" data-i18n="tls.s6.sub">SSL Inspection, MitM corporativo y ataques reales</p>
+          <pre data-i18n="tls.pre4">
+ESCENARIO 1 — PROXY CORPORATIVO (legítimo pero importante conocer):
+  Empresa instala root CA propia en todos los dispositivos
+  Firewall/proxy intercepta conexiones TLS:
+    Cliente → Proxy: TLS con certificado FALSO del proxy
+    Proxy → Servidor: TLS real con certificado del servidor
+  → La empresa puede ver todo el tráfico HTTPS (SSL inspection)
+  → Los usuarios ven el candado verde (confiaron en la CA corporativa)
+  → IOC: certificados firmados por "Empresa Corp CA" en lugar de DigiCert/Let's Encrypt
+
+ESCENARIO 2 — MitM MALICIOSO:
+  Atacante (WiFi pública, ARP spoofing en LAN):
+    → Intercepta conexión HTTPS
+    → Presenta certificado falso para el dominio
+    → El browser ALERTARÍA: "Certificado no confiable"
+    → ¿El usuario hace clic en "Continuar de todas formas"? ← punto de falla
+  Si el atacante tiene una CA root instalada en el dispositivo → sin alertas
+
+ESCENARIO 3 — CERTIFICATE TRANSPARENCY ABUSE:
+  Let's Encrypt entrega certificados para cualquier dominio sin verificar
+  Un atacante puede obtener: cert para "banco-seguro.com" (phishing)
+  CT Logs: https://crt.sh permite monitorear nuevos certs para tu dominio
+  DETECCIÓN: alert si aparece un cert nuevo para *.empresa.com emitido por CA desconocida
+
+IOC EN SOC:
+  Zeek ssl.log: issuer ≠ CA conocida para un dominio conocido
+  Browser alert logs: ERR_CERT_AUTHORITY_INVALID para sitios internos
+  NetFlow: tráfico HTTPS a IPs no en threat intel (C2 en HTTPS)</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 12</span>
+          <h2 data-i18n="tls.s7.title">JA3 y TLS en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="tls.s7.sub">Zeek ssl.log + JA3 fingerprinting — detectar malware sin descifrar el tráfico</p>
+          <pre data-i18n="tls.pre5">
+# Zeek ssl.log — campos principales
+ts     id.orig_h     id.resp_h        version  cipher               cert_chain_fuids  subject               issuer
+10:01  10.0.0.50     93.184.216.34    TLSv12   TLS_ECDHE_RSA_AES256 F1abc             example.com           DigiCert Inc
+10:02  10.0.0.55     185.220.101.5    TLSv12   TLS_RSA_WITH_RC4_128 F2def  ← ⚠ RC4!  *.vps-host.ru         Unknown CA
+
+JA3 FINGERPRINTING:
+  JA3 = MD5 de: TLSVersion,Ciphers,Extensions,EllipticCurves,EllipticCurveFormats
+  del ClientHello
+
+  JA3 conocidos:
+  7dcce5b76c8b17472d024758970a406b → Chrome normal
+  de350869b8c85de67a350c8d186f11e6 → Firefox normal
+  6734f37431670b3ab4292b8f60f29984 → Metasploit Meterpreter ← IOC
+  72a589da586844d7f0818ce684948eea → Cobalt Strike por defecto ← IOC
+  a0e9f5d64349fb13191bc781f81f42e1 → Python requests
+
+  # En Zeek + JA3 script
+  zeek-cut ts id.orig_h ja3 ja3s < ssl.log \
+    | grep "72a589da586844d7f0818ce684948eea"
+  → Alerta: Cobalt Strike detectado
+
+CIPHER SUITES PELIGROSAS EN ssl.log:
+  RC4_*         → roto matemáticamente
+  *_DES_*       → DES roto (56 bits)
+  *_NULL_*      → sin cifrado (!)
+  *_EXPORT_*    → claves débiles para exportación (FREAK)
+  *RSA_*        → sin forward secrecy (si el servidor es comprometido, pasado descifrable)
+
+IOC ADICIONALES:
+  Certificados con validity > 825 días (Let's Encrypt = 90 días, legítimos ≤ 2 años)
+  Certificados con SNI vacío (bots, scanners, algunos C2)
+  Muchas conexiones TLS a misma IP con SNI diferente cada vez (C2 domain fronting)</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 12</span>
+          <h2 data-i18n="tls.s8.title">TLS Hardening y buenas prácticas</h2>
+          <p class="slide-subtitle" data-i18n="tls.s8.sub">Configuración mínima segura para servidores TLS</p>
+          <ul>
+            <li>🚫 <strong data-i18n="tls.s8.h1">Solo TLS 1.2 y 1.3</strong> — deshabilitar SSLv2, SSLv3, TLS 1.0, TLS 1.1</li>
+            <li>🔒 <strong data-i18n="tls.s8.h2">Cipher suites seguras</strong> — ECDHE con AESGCM o ChaCha20-Poly1305, sin RC4/3DES/NULL</li>
+            <li>🔑 <strong data-i18n="tls.s8.h3">Forward Secrecy</strong> — preferir cipher suites con DHE/ECDHE (se llama PFS)</li>
+            <li>📋 <strong data-i18n="tls.s8.h4">HSTS</strong> — HTTP Strict Transport Security fuerza HTTPS siempre</li>
+            <li>🔄 <strong data-i18n="tls.s8.h5">Renovación de certificados</strong> — Let's Encrypt: 90 días, renovar a los 60</li>
+            <li>📊 <strong data-i18n="tls.s8.h6">Certificate Transparency monitoring</strong> — alertar si aparece un cert nuevo para tu dominio</li>
+            <li>🧪 <strong data-i18n="tls.s8.h7">Testear con testssl.sh o SSL Labs</strong> — auditoría de configuración TLS</li>
+          </ul>
+          <pre style="margin-top:1rem;" data-i18n="tls.pre6">
+# Nginx — configuración TLS mínima segura
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:
+            ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+ssl_prefer_server_ciphers on;
+ssl_session_tickets off;
+
+# HSTS
+add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+
+# testssl.sh
+testssl.sh --fast https://www.empresa.com
+→ Muestra: versiones, ciphers, vulnerabilidades (POODLE, BEAST, CRIME, Heartbleed...)
+→ Da una nota de A+ a F</pre>
+        </div>
+
+
+        <div class="slide">
+          <span class="slide-number">9 / 12</span>
+          <h2 data-i18n="tls.s9.title">Ataque 3: BEAST — CBC Padding Oracle</h2>
+          <p class="slide-subtitle" data-i18n="tls.s9.sub">CVE-2011-3389 — Browser Exploit Against SSL/TLS</p>
+          <p data-i18n="tls.s9.p1">BEAST explota que TLS 1.0 usa CBC con un IV predecible (el último bloque cifrado). Un atacante MitM con JavaScript inyectado puede adivinar byte a byte el contenido cifrado — típicamente una cookie de sesión.</p>
+          <pre data-i18n="tls.pre7">
+TLS 1.0 CBC — IV predecible:
+  Bloque N cifrado = AES(plaintext_N XOR ciphertext_{N-1})
+  IV del bloque N+1 = ciphertext_N  ← IV conocido por el atacante!
+
+FLUJO DEL ATAQUE:
+  1. Atacante MitM + JavaScript inyectado en la página víctima
+  2. JavaScript elige plaintexts conocidos → observa ciphertext resultante
+  3. Atacante compara: AES(plaintext_guess XOR IV_conocido) == bloque_objetivo?
+  4. Si coincide → byte adivinado correctamente
+  5. Repite × 16 bytes de cookie = sesión comprometida
+
+REQUISITOS:
+  → TLS 1.0 negociado (servidor + cliente)
+  → Atacante MitM activo (WiFi pública, ARP spoofing)
+  → JavaScript ejecutándose en el browser de la víctima
+
+MITIGACIÓN:
+  → Deshabilitar TLS 1.0 y 1.1 (BEAST imposible sin ellos)
+  → TLS 1.3: CBC no existe → inmune por diseño
+  → TLS 1.2 con AEAD (GCM): no usa CBC → inmune
+  → Nginx: ssl_protocols TLSv1.2 TLSv1.3;</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVE-2011-3389 · Parcheado en browsers 2012 (1/n-record splitting) · MITRE ATT&CK: <strong>T1573</strong></p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">10 / 12</span>
+          <h2 data-i18n="tls.s10.title">Ataque 4: CRIME / BREACH — Oráculo de compresión</h2>
+          <p class="slide-subtitle" data-i18n="tls.s10.sub">CVE-2012-4929 / CVE-2013-3587 — Compresión como canal lateral</p>
+          <p data-i18n="tls.s10.p1">CRIME y BREACH explotan que la compresión revela información sobre el contenido: si el atacante puede inyectar texto y observar el tamaño comprimido, puede adivinar bytes secretos uno a uno.</p>
+          <pre data-i18n="tls.pre8">
+PRINCIPIO COMÚN:
+  La compresión reduce el tamaño si hay strings repetidos.
+  Si el atacante controla parte del texto Y puede observar el tamaño → oráculo.
+
+CRIME (TLS-level compression — CVE-2012-4929):
+  Requiere: TLS con compresión habilitada (DEFLATE en TLS)
+  Atacante inyecta: "session=A" en URL → mide tamaño cifrado
+  Si "session=A" aparece en la cookie → compresión reduce tamaño → ¡acierto!
+  Repite con cada caracter del alfabeto → descifra cookie byte a byte
+
+  MITIGACIÓN: ssl_compression off; (ya deshabilitado en TLS 1.3, configurar en 1.2)
+
+BREACH (HTTP gzip — CVE-2013-3587):
+  Mismo principio pero a nivel HTTP (gzip/deflate)
+  Afecta a TLS 1.3 también (la vulnerabilidad es HTTP, no TLS)
+  Requiere: respuesta HTTP comprimida + secreto reflejado en respuesta
+
+  MITIGACIÓN:
+  → No comprimir respuestas que contengan secrets
+  → Tokens CSRF con componente aleatorio en cada respuesta
+  → Separar secretos del contenido reflejado
+  → "Masking" del cuerpo de respuesta (añadir ruido al tamaño)</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CRIME: CVE-2012-4929 · BREACH: CVE-2013-3587 · Investigadores: Rizzo &amp; Duong</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">11 / 12</span>
+          <h2 data-i18n="tls.s11.title">Ataque 5: SWEET32 — Birthday Attack en 3DES</h2>
+          <p class="slide-subtitle" data-i18n="tls.s11.sub">CVE-2016-2183 — Colisiones de bloque en cifrados de 64 bits</p>
+          <p data-i18n="tls.s11.p1">SWEET32 explota la paradoja del cumpleaños aplicada a cifrados de bloque de 64 bits como 3DES. Con suficiente tráfico bajo la misma clave (~32GB), es estadísticamente probable encontrar dos bloques de ciphertext idénticos — lo que revela información sobre el plaintext.</p>
+          <pre data-i18n="tls.pre9">
+LA PARADOJA DEL CUMPLEAÑOS APLICADA A TLS:
+  3DES: bloque = 64 bits → espacio de 2^64 bloques posibles
+  Birthday bound: colisión probable a 2^(64/2) = 2^32 bloques ≈ 32 GB
+
+  Si dos bloques cifrados son iguales:
+    C_i = C_j → P_i XOR IV_i = P_j XOR IV_j
+  Si el atacante conoce un plaintext → puede derivar el otro
+
+CASO PRÁCTICO:
+  Sesión HTTPS larga (video, WebSocket, keepalive HTTP/1.1)
+  Cookie de sesión se repite en cada request → plaintext conocido
+  Atacante MitM captura tráfico → espera colisión → extrae cookie
+
+  32 GB parece mucho, pero:
+  → Video HD streaming: 32 GB en ~30 minutos
+  → Script automatizado puede forzar requests a alta velocidad
+
+VERIFICAR:
+  testssl.sh --sweet32 https://servidor.com
+  nmap --script ssl-enum-ciphers -p 443 servidor.com  ← buscar 3DES
+
+MITIGACIÓN:
+  → Eliminar 3DES de ssl_ciphers (ningún server moderno lo necesita)
+  → TLS 1.3: 3DES no existe → inmune por diseño
+  → Usar AES-128-GCM o AES-256-GCM (bloque 128 bits, birthday bound ≫ 32 GB)</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVE-2016-2183 · Bhargavan &amp; Leurent (INRIA 2016) · Afecta a DES, 3DES, Blowfish</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">12 / 12</span>
+          <h2 data-i18n="tls.s12.title">Ataque 6: SSL Renegotiation Attack</h2>
+          <p class="slide-subtitle" data-i18n="tls.s12.sub">CVE-2009-3555 — Inyección de datos en sesiones TLS existentes</p>
+          <p data-i18n="tls.s12.p1">TLS permite renegociar los parámetros de una sesión existente. Antes de RFC 5746, no había ningún mecanismo que vinculara criptográficamente la renegociación con la sesión original. Un atacante podía inyectar datos maliciosos que el servidor concatenaba con los del cliente legítimo.</p>
+          <pre data-i18n="tls.pre10">
+FLUJO DEL ATAQUE:
+                                              Servidor
+  Atacante: abre conexión TLS al servidor        │
+  Atacante → Servidor: "GET /admin
+X-Inj: "  │ ← datos inyectados
+                                                 │
+  Atacante: dispara renegociación TLS            │
+  [Cliente real se une a la sesión renegociada]  │
+  Cliente → Servidor: GET /real Cookie: abc123   │
+                                                 │
+  Servidor concatena y procesa:                  │
+  "GET /admin
+X-Inj: GET /real Cookie: abc123" ← inyección exitosa!
+
+IMPACTO:
+  → Atacante puede hacer requests HTTP arbitrarios autenticados por el cliente
+  → Si el cliente tiene sesión autenticada → atacante hereda sus privilegios
+  → Acceso a endpoints protegidos sin credenciales directas
+
+REQUISITO: servidor TLS vulnerable sin RFC 5746
+
+SOLUCIÓN — RFC 5746 (Renegotiation Indication Extension):
+  Cada renegociación incluye un "renegotiation_info" con un hash de la
+  sesión anterior. El servidor verifica que coincida antes de aceptar.
+  → Sin el token → renegotiación rechazada → ataque imposible
+
+VERIFICAR:
+  openssl s_client -connect servidor:443 -legacy_renegotiation
+  testssl.sh --reneg https://servidor.com
+
+ESTADO ACTUAL: todos los servidores modernos incluyen RFC 5746 (2010+)</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">CVE-2009-3555 · RFC 5746 (2010) · Marsh Ray &amp; Steve Dispensa · MITRE ATT&CK: <strong>T1573</strong></p>
+        </div>
+
+      </div>
+      <div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="tls.ej1.title">Analizar Zeek ssl.log — ¿qué es sospechoso?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tls.ej1.q">Analizá este extracto de Zeek ssl.log. Identificá todas las entradas sospechosas y explicá por qué:</p>
+            <pre>
+ts       id.orig_h     id.resp_h        version   cipher                           subject                     issuer
+09:01    10.0.0.50     93.184.216.34    TLSv13    TLS_AES_256_GCM_SHA384           example.com                 DigiCert Inc
+09:02    10.0.0.55     185.220.101.5    TLSv12    TLS_RSA_WITH_RC4_128_MD5         -                           Unknown
+09:03    10.0.0.60     10.0.0.1         TLSv10    TLS_RSA_WITH_3DES_EDE_CBC_SHA    internal.empresa.com        EmpresaCorp CA
+09:04    10.0.0.50     104.21.55.33     TLSv13    TLS_AES_128_GCM_SHA256           *.cloudflare.com            DigiCert
+09:05    10.0.0.99     45.33.32.156     TLSv12    TLS_RSA_WITH_AES_128_CBC_SHA     -                           -
+09:06    10.0.0.50     172.217.15.46    TLSv13    TLS_AES_256_GCM_SHA384           www.google.com              Google Trust Services</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+ANÁLISIS ENTRADA POR ENTRADA:
+
+09:01 → 93.184.216.34 (example.com, DigiCert, TLS 1.3, AES-256-GCM)
+  ✅ LEGÍTIMO: TLS 1.3, cipher moderno, CA reconocida, SNI coherente con IP
+
+09:02 → 185.220.101.5 (sin subject, Unknown CA, TLS 1.2, RC4_128_MD5)
+  ❌ SOSPECHOSO — MÚLTIPLES FLAGS:
+  1. RC4 cipher — matemáticamente roto desde 2015, ningún servidor legítimo lo usa
+  2. MD5 MAC — debilitado, colisiones conocidas
+  3. Subject vacío — no hay SNI o certificado sin información
+  4. Unknown CA — CA no reconocida, posible certificado autofirmado o malicioso
+  5. 185.220.101.5 = rango de Tor exit nodes
+
+09:03 → 10.0.0.1 (internal.empresa.com, EmpresaCorp CA, TLS 1.0, 3DES)
+  ⚠ PROBLEMA INTERNO — CONFIGURACIÓN LEGACY:
+  1. TLS 1.0 — DEPRECATED por RFC 8996, no debería usarse desde 2021
+  2. 3DES_CBC — vulnerable a SWEET32 (birthday attack), cipher débil
+  3. Es tráfico interno (10.x → 10.x) por eso tiene CA corporativa
+  → Acción: actualizar el servidor internal.empresa.com a TLS 1.2+ y ciphers modernos
+  → No es un ataque activo, pero es una vulnerabilidad real
+
+09:04 → 104.21.55.33 (*.cloudflare.com, TLS 1.3)
+  ✅ PROBABLEMENTE LEGÍTIMO: Cloudflare CDN, TLS 1.3 moderno
+
+09:05 → 45.33.32.156 (sin subject, sin issuer, TLS 1.2, AES-128-CBC)
+  ⚠ SOSPECHOSO:
+  1. Sin SNI (subject/issuer vacíos) — el cliente no especificó hostname → bot/scanner/C2
+  2. CBC cipher en TLS 1.2 — no es roto pero es subóptimo
+  3. 45.33.32.156 = rango de Linode/Akamai (VPS popular para C2)
+  → Correlacionar: ¿es un servidor conocido? ¿hubo actividad previa desde 10.0.0.99?
+
+09:06 → 172.217.15.46 (www.google.com, TLS 1.3)
+  ✅ LEGÍTIMO: Google, TLS 1.3, cipher moderno
+
+PRIORIDAD DE ACCIONES:
+  1. Crítico: investigar 09:02 (RC4 + Tor exit node + Unknown CA) — posible C2 o MitM
+  2. Alto: investigar 09:05 (VPS sin SNI) — correlacionar con otras actividades de 10.0.0.99
+  3. Medio: remediar 09:03 (TLS 1.0 + 3DES en servidor interno) — vulnerability
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="tls.ej2.title">JA3 match — ¿qué está corriendo en la red?</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tls.ej2.q">El SIEM alertó por JA3 sospechosos. Analizá cada uno y determiná la acción:</p>
+            <pre data-i18n="tls.pre12">
+JA3 detectados en las últimas 24h:
+  Host: 10.0.0.77  JA3: 72a589da586844d7f0818ce684948eea  →  destino: 45.33.32.156:443
+  Host: 10.0.0.50  JA3: 7dcce5b76c8b17472d024758970a406b  →  destino: google.com:443
+  Host: 10.0.0.33  JA3: 6734f37431670b3ab4292b8f60f29984  →  destino: 1.2.3.4:443
+  Host: 10.0.0.22  JA3: a0e9f5d64349fb13191bc781f81f42e1  →  destino: api.empresa.com:443
+
+Referencias JA3 conocidos:
+  72a589da586844d7f0818ce684948eea → Cobalt Strike default beacon
+  7dcce5b76c8b17472d024758970a406b → Chrome 110+ (Linux/Windows)
+  6734f37431670b3ab4292b8f60f29984 → Metasploit Meterpreter
+  a0e9f5d64349fb13191bc781f81f42e1 → Python requests library</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+ANÁLISIS:
+
+10.0.0.77 → JA3: 72a589da (Cobalt Strike beacon) → 45.33.32.156:443
+  🚨 CRÍTICO — Cobalt Strike es un framework de ataque comercial/pirata
+  Cobalt Strike es el C2 más usado por APTs y ransomware groups
+  El beacon se conecta periódicamente al C2 del atacante sobre HTTPS
+  → El atacante tiene acceso al host 10.0.0.77 (comprometido)
+  → 45.33.32.156 (Linode VPS) es el servidor C2 del atacante
+
+  ACCIONES:
+  1. AISLAR INMEDIATAMENTE 10.0.0.77 de la red
+  2. Activar incident response — posible APT / ransomware
+  3. Tomar snapshot forense del host antes de apagarlo
+  4. Buscar en otros hosts el mismo JA3 (¿propagación?)
+  5. Bloquear 45.33.32.156 en todos los firewalls
+
+10.0.0.50 → JA3: 7dcce5b7 (Chrome) → google.com:443
+  ✅ LEGÍTIMO: tráfico normal de Chrome a Google
+
+10.0.0.33 → JA3: 6734f37 (Metasploit Meterpreter) → 1.2.3.4:443
+  🚨 CRÍTICO — Meterpreter es el shell de Metasploit Framework
+  El host 10.0.0.33 tiene una shell activa hacia 1.2.3.4
+  → Comprometido, el atacante tiene control interactivo del sistema
+
+  ACCIONES:
+  1. AISLAR 10.0.0.33
+  2. Correlacionar con otros logs: ¿cuándo se comprometió?
+  3. 1.2.3.4 — bloquear y hacer threat intel lookup
+  4. Buscar el vector de entrada: phishing, exploit, etc.
+
+10.0.0.22 → JA3: a0e9f5d6 (Python requests) → api.empresa.com:443
+  ⚠ INVESTIGAR: Python requests hacia API interna
+  → Puede ser legítimo: script de automatización, monitoreo
+  → Puede ser malicioso: script de exfiltración, data scraping interno
+  → Acción: identificar el proceso Python en 10.0.0.22
+    lsof -i tcp:443 | grep python  /  netstat -tulnp | grep python
+  → Si no hay proceso legítimo conocido → investigar
+
+RESUMEN DE PRIORIDAD:
+  P1: 10.0.0.77 (Cobalt Strike) — AISLAR AHORA
+  P1: 10.0.0.33 (Meterpreter) — AISLAR AHORA
+  P3: 10.0.0.22 (Python) — investigar en las próximas horas
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="tls.ej3.title">Auditar configuración TLS de un servidor</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tls.ej3.q">El servidor web de la empresa obtuvo calificación "B" en SSL Labs. Analizá el reporte y priorizá las correcciones:</p>
+            <pre>
+Reporte testssl.sh para https://www.empresa.com:
+
+Protocols:
+  SSLv2:   not offered (OK)
+  SSLv3:   not offered (OK)
+  TLS 1.0: offered (DEPRECATED) ← WARN
+  TLS 1.1: offered (DEPRECATED) ← WARN
+  TLS 1.2: offered
+  TLS 1.3: not offered ← MINOR
+
+Cipher suites (TLS 1.2):
+  TLS_RSA_WITH_AES_256_CBC_SHA  — offered ← no forward secrecy
+  TLS_RSA_WITH_3DES_EDE_CBC_SHA — offered ← SWEET32 vulnerable
+  TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 — offered (OK)
+  TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305  — offered (OK)
+
+Certificate:
+  Expiry: 2025-12-31 (valid)
+  Key: RSA 2048 bits (OK)
+  Signature: SHA256
+  OCSP stapling: no ← minor
+
+Headers:
+  HSTS: not set ← WARN
+  HSTS preload: no
+
+Vulnerabilities:
+  POODLE (SSLv3): not vulnerable (OK)
+  BEAST: potentially vulnerable (TLS 1.0 offered)
+  SWEET32: vulnerable (3DES offered)
+  HEARTBLEED: not vulnerable (OK)
+  CRIME: not vulnerable</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+ANÁLISIS Y PLAN DE REMEDIACIÓN — PRIORIDAD:
+
+P1 — CRÍTICO (hacer esta semana):
+
+1. SWEET32 — 3DES es vulnerable:
+   TLS_RSA_WITH_3DES_EDE_CBC_SHA → deshabilitar inmediatamente
+   3DES es vulnerable a birthday attack después de 32GB de tráfico.
+   # Nginx: eliminar de ssl_ciphers cualquier 3DES
+
+2. DESHABILITAR TLS 1.0 y TLS 1.1:
+   Son DEPRECATED por RFC 8996 desde 2021.
+   Exponen a BEAST (TLS 1.0) y otros ataques.
+   Compatibilidad: casi ningún cliente moderno los necesita ya.
+   # Nginx: ssl_protocols TLSv1.2 TLSv1.3;
+
+P2 — IMPORTANTE (hacer este mes):
+
+3. HABILITAR TLS 1.3:
+   TLS 1.3 es más seguro y más rápido que 1.2
+   Soportado por todos los browsers desde 2018+
+
+4. QUITAR cipher suites sin forward secrecy:
+   TLS_RSA_WITH_AES_256_CBC_SHA → quitar (RSA key exchange, no PFS)
+   Si el cert. privado es robado, TODO el tráfico pasado es descifrable
+   Dejar solo ECDHE_RSA y ECDHE_ECDSA cipher suites
+
+5. HSTS — agregar header:
+   add_header Strict-Transport-Security "max-age=31536000; includeSubDomains";
+   Previene ataques de downgrade HTTPS → HTTP
+
+P3 — MEJORA (próximo sprint):
+
+6. OCSP Stapling — mejora rendimiento y privacidad:
+   ssl_stapling on;
+   ssl_stapling_verify on;
+
+7. Considerar migrar a clave ECDSA (256 bits, más eficiente que RSA 2048)
+
+CONFIGURACIÓN RESULTANTE (Nginx):
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:
+              ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+  ssl_prefer_server_ciphers off;  # TLS 1.3 elige el cliente
+  ssl_session_tickets off;
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+
+  → Con esto: calificación A+ en SSL Labs
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="tls.ej4.title">¿Puede el SOC detectar ataques dentro de TLS?</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tls.ej4.q">Un colega dice: "Si el tráfico va cifrado con TLS no podemos detectar nada." ¿Tiene razón? Explicá qué puede y qué no puede ver el SOC en el tráfico TLS.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+TU COLEGA ESTÁ PARCIALMENTE EQUIVOCADO. El SOC puede detectar MUCHO en TLS
+sin descifrar el contenido.
+
+QUÉ PUEDE VER EL SOC SIN DESCIFRAR TLS:
+
+1. METADATOS DE LA CONEXIÓN (Zeek conn.log + ssl.log):
+   → IP origen y destino
+   → Puerto destino
+   → Duración de la sesión
+   → Bytes enviados / recibidos
+   → Versión de TLS negociada
+   → Cipher suite elegida
+   → Certificado del servidor (subject, issuer, SANs, expiración)
+   → SNI (Server Name Indication) — hostname en el ClientHello
+
+2. JA3/JA3S FINGERPRINTING:
+   → Identifica el cliente (Chrome, Firefox, Python, Cobalt Strike)
+   → JA3 de malware conocido → alerta sin ver contenido
+
+3. PATRONES DE COMPORTAMIENTO:
+   → Frecuencia de conexiones (C2 beacon a intervalos regulares)
+   → Volumetría (exfiltración: bytes out >> bytes in)
+   → Geolocalización del servidor destino
+   → Reputación de IP/dominio (threat intel feeds)
+   → DNS lookup antes de la conexión (¿preguntó por el dominio? ¿cuándo?)
+
+4. CERTIFICATE ANALYSIS:
+   → Certificado autofirmado / CA desconocida
+   → Certificado con información minimal (C2 suelen usar certs genéricos)
+   → SNI diferente al subject del certificado (domain fronting)
+   → Certificado con validez muy larga o muy corta
+
+5. TIMING Y PATRONES:
+   → C2 beacon: conexión a intervalos fijos (cada 60s, 300s, etc.)
+   → "Jitter" del beacon: el atacante añade variación para evasión
+   → Conexiones nocturnas regulares desde workstations
+
+QUÉ NO PUEDE VER SIN SSL INSPECTION:
+  → El contenido de los datos (archivos, contraseñas HTTP, etc.)
+  → URLs específicas dentro de HTTPS
+  → Código malicioso en un download cifrado
+  → Credenciales en el cuerpo de una petición HTTPS
+
+OPCIONES PARA SSL INSPECTION:
+  → SSL/TLS Inspection en el proxy/firewall corporativo
+    (con CA root corporativa en todos los dispositivos)
+  → Solo posible en tráfico corporativo, no en BYOD personal
+  → Legal / ética: empleados deben ser informados
+
+CONCLUSIÓN:
+  TLS no hace invisible al atacante — hace opaco el contenido.
+  Un SOC moderno con Zeek + JA3 + threat intel puede detectar C2 cifrado,
+  exfiltración por volumen, y herramientas de ataque por fingerprint.
+  El paradigma cambió: de "inspeccionar contenido" a "analizar comportamiento".
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="tls.ej5.title">Explicar Certificate Transparency al equipo de DevOps</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="tls.ej5.q">DevOps te pregunta: "¿Por qué deberíamos monitorear Certificate Transparency Logs? ¿Qué nos aporta?" Preparar una explicación clara con casos de uso concretos.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+QUÉ ES CERTIFICATE TRANSPARENCY (CT):
+
+Desde 2018, todos los CAs (Let's Encrypt, DigiCert, etc.) DEBEN publicar
+cada certificado que emiten en logs públicos e inmutables.
+Cualquiera puede consultar estos logs en tiempo real.
+
+POR QUÉ NOS IMPORTA — CASOS DE USO CONCRETOS:
+
+1. DETECTAR PHISHING ANTES DE QUE IMPACTE:
+   Un atacante registra empresa-segura.com y obtiene un cert TLS.
+   El cert aparece en CT Logs en minutos.
+   Con monitoreo automático (cert.sh + alertas) lo vemos antes de que
+   empiecen los ataques de phishing a nuestros clientes/empleados.
+
+   Herramientas: crt.sh, Certstream, Facebook CT Monitor
+
+2. DETECTAR SUBDOMINIOS NO AUTORIZADOS:
+   Un developer registra dev-api.empresa.com en producción sin aprobación.
+   El cert nuevo aparece en CT Logs → equipo de seguridad lo ve.
+   → Shadow IT discovery
+
+3. DETECTAR CERT EMITIDO DE FORMA INCORRECTA (CA COMPROMISE):
+   Si una CA intermedia emite un cert para empresa.com sin autorización
+   (ha pasado en la historia: Comodo 2011, DigiNotar 2011)
+   → CT Logs lo captura inmediatamente
+   → Se puede revocar antes de que sea usado masivamente
+
+4. INVENTARIO DE CERTIFICADOS PROPIOS:
+   ¿Tenés todos tus certs inventariados? ¿Sabés cuándo expiran?
+   CT Logs te da el inventario completo de certificados emitidos para tus dominios.
+
+CÓMO IMPLEMENTARLO:
+   # Buscar todos los certs para empresa.com (historico)
+   https://crt.sh/?q=%.empresa.com
+
+   # Alerta en tiempo real con Certstream (Python)
+   pip install certstream
+   certstream --full  # filtra por empresa.com
+
+   # Ejemplo de script de monitoreo:
+   import certstream
+   def callback(message, context):
+       if message['message_type'] == 'certificate_update':
+           domains = message['data']['leaf_cert']['all_domains']
+           if any('empresa.com' in d for d in domains):
+               alert(f"Nuevo certificado: {domains}")
+   certstream.listen_for_updates(callback)
+
+RESUMEN PARA DEVOPS:
+  CT Logs = cámara de seguridad para certificados TLS
+  Cada cert emitido para tu dominio aparece en minutos
+  Monitoreo gratuito, implementación simple
+  ROI: detectar phishing/shadow IT antes de que sea un problema
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="tls.challenge.title">Incidente #TLS-001: "El malware que se esconde en HTTPS"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="tls.challenge.ctx">
+            El EDR de un host (10.0.0.88, laptop de lrodriguez) disparó una alerta de baja prioridad: "proceso inusual haciendo conexiones de red". La alerta fue ignorada hace 3 días. Hoy el SIEM correlaciona 72 conexiones TLS salientes en 3 días, todas al mismo destino, en intervalos de 3600 segundos ±300s de variación. El JA3 no matchea ningún browser conocido.
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="tls.pre14">
+Zeek ssl.log (muestra de 72 entradas similares):
+  ts              id.orig_h   id.resp_h        version  cipher                       subject  issuer   duration  orig_bytes  resp_bytes
+  [día1] 09:02    10.0.0.88   185.199.108.5    TLSv12   TLS_RSA_WITH_AES_256_CBC_SHA -        -        2s        1.2KB       840B
+  [día1] 10:01    10.0.0.88   185.199.108.5    TLSv12   TLS_RSA_WITH_AES_256_CBC_SHA -        -        2s        1.1KB       822B
+  ...
+  [día3] 17:05    10.0.0.88   185.199.108.5    TLSv12   TLS_RSA_WITH_AES_256_CBC_SHA -        -        2s        45MB        2.1KB  ← !!!
+
+JA3: b386946a5a44d1ddcc843bc75336dfce (no en bases conocidas)
+185.199.108.5 → GitHub Pages CDN (IP legítima de GitHub Pages)</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="tls.challenge.q">Análisis completo: ¿qué técnica usa el malware y cómo responder?</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box">
+QUÉ ESTÁ PASANDO: C2 Beacon + Exfiltración via HTTPS con Domain Fronting
+
+ANÁLISIS:
+
+1. PATRÓN DE BEACON C2:
+   72 conexiones en 3 días = una por hora (3600s ± 300s de jitter)
+   → "Jitter" es variación intencional para evadir detección por intervalos exactos
+   → Cada conexión dura 2s, 1-1.2KB enviado, <900B recibido
+   → Patrón clásico de C2 beacon: check-in periódico, recibe comandos pequeños
+
+2. LA CONEXIÓN DEL DÍA 3 — 45MB OUT:
+   De repente: 45MB salientes (vs 1.2KB normal)
+   → El atacante envió comando de exfiltración
+   → 45MB de datos internos enviados al C2
+   → El tamaño de vuelta (2.1KB) = solo la confirmación
+
+3. DOMAIN FRONTING / IP AMBIGÜEDAD:
+   185.199.108.5 = GitHub Pages CDN (IP legítima de GitHub)
+   Muchas organizaciones permiten GitHub en sus firewalls
+   → El malware usa esta IP como "frente" (CDN compartida)
+   → El tráfico llega al CDN de GitHub, pero el SNI en el TLS
+     puede apuntar a otro hostname hospedado en la misma IP
+   → El firewall ve "GitHub" y permite → en realidad es el C2
+
+   VERIFICACIÓN: Si SSL subject está vacío (como en los logs)
+   → El cliente no envía SNI legible → Domain Fronting confirmado
+
+4. JA3 NO CONOCIDO:
+   b386946a... no coincide con browsers estándar ni herramientas conocidas
+   → El malware implementa su propio cliente TLS
+   → No es un browser, no es curl, no es requests estándar
+
+ACCIONES INMEDIATAS:
+
+T+0:
+  1. AISLAR 10.0.0.88: revocar acceso a red corporativa
+  2. Preservar memoria RAM y disco (evidencia forense)
+     FTK Imager, Volatility3 para análisis de memoria
+
+T+1h:
+  3. En el host comprometido: identificar el proceso
+     netstat -tulnp | grep 185.199.108.5
+     lsof -i tcp | grep ESTABLISHED
+     → Identificar PID y ejecutable
+
+  4. Buscar el malware:
+     Proceso con nombre genérico (svchost.exe con path inusual, etc.)
+     Verificar si hay DLL injection o proceso hijo de algo sospechoso
+
+  5. Qué datos exfiltró (los 45MB):
+     Correlacionar con DLP y accesos a archivos en las horas previas
+     Revisar eventos de acceso a datos sensibles ese día
+
+  6. Scope: ¿hay otros hosts con el mismo JA3 o mismo destino?
+     zeek-cut id.orig_h id.resp_h ja3 < ssl.log \
+       | awk '$2=="185.199.108.5"' | sort -u
+
+T+24h:
+  7. Análisis de malware en sandbox (Cuckoo, Any.run)
+  8. Determinar vector de entrada: phishing en el email de lrodriguez?
+  9. IOC sharing: reporte con TTP para detectar en otros hosts
+
+LECCIÓN:
+  El malware usó 3 capas de evasión:
+  a) HTTPS cifrado — no se puede ver el contenido
+  b) IP de CDN confiada (GitHub Pages) — pasa el firewall
+  c) Jitter en el beacon — evita detección por intervalos fijos
+
+  PERO fue detectado por:
+  → Zeek ssl.log: patrón de beacon visible en metadatos
+  → JA3 inusual: proceso no es un browser conocido
+  → Anomalía de volumen: 1KB por hora → 45MB en un momento = exfiltración
+  → EDR: alerta de baja prioridad ignorada 3 días antes (lección: no ignorar alertas bajas)
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 8446 — TLS 1.3 (2018)</h4>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc8446" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc8446</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 8996 — Deprecating TLS 1.0 and 1.1</h4>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc8996" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc8996</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.audit.testssl">Auditoría · testssl</div>
+          <h4 data-i18n="tls.rec.h4.testssl">testssl.sh — auditoría TLS completa</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="tls.pre15"># Auditoría completa
+testssl.sh https://www.empresa.com
+
+# Solo vulnerabilidades
+testssl.sh --vulnerable https://www.empresa.com
+
+# Cipher suites
+testssl.sh --cipher-per-proto https://www.empresa.com</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.detection.ja3">Detección · JA3</div>
+          <h4 data-i18n="tls.rec.h4.ja3">JA3 con Zeek</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;"># Instalar plugin JA3 en Zeek
+zkg install salesforce/ja3
+
+# Consultar JA3 sospechosos
+zeek-cut ts id.orig_h ja3 ja3s < ssl.log \
+  | grep "72a589da586844d7f0818ce684948eea"
+
+# Base de datos JA3 conocidos:
+# https://ja3er.com/</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">CT Monitor</div>
+          <h4>Certificate Transparency</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="tls.pre17"># Buscar certs para un dominio
+https://crt.sh/?q=%.empresa.com
+
+# Monitor en tiempo real (Python)
+pip install certstream
+certstream --full | grep empresa.com
+
+# SSL Labs (test online)
+https://www.ssllabs.com/ssltest/</pre>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet TLS para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr><th data-i18n="cheat.signal">Señal en logs</th><th data-i18n="cheat.attack">Posible ataque/riesgo</th><th data-i18n="cheat.action">Acción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>JA3 = 72a589da (Cobalt Strike)</td><td data-i18n="tls.ch.r1b">Host comprometido con C2 activo</td><td data-i18n="tls.ch.r1c">Crítico — aislar host, IR inmediato</td></tr>
+            <tr><td>JA3 = 6734f37 (Meterpreter)</td><td data-i18n="tls.ch.r2b">Shell reversa Metasploit activa</td><td data-i18n="tls.ch.r2c">Crítico — aislar host, IR inmediato</td></tr>
+            <tr><td data-i18n="tls.ch.r3a">TLS a IP sin SNI desde workstation</td><td>Malware / bot / scanner</td><td data-i18n="tls.ch.r3c">Investigar proceso en el host</td></tr>
+            <tr><td data-i18n="tls.ch.r4a">Cipher RC4 o 3DES en ssl.log</td><td data-i18n="tls.ch.r4b">Servidor legacy o MitM con downgrade</td><td data-i18n="tls.ch.r4c">Remediar configuración TLS</td></tr>
+            <tr><td data-i18n="tls.ch.r5a">CA desconocida en tráfico corporativo</td><td data-i18n="tls.ch.r5b">MitM / certificado falso / interceptor</td><td data-i18n="tls.ch.r5c">Alto — verificar si hay proxy MitM autorizado</td></tr>
+            <tr><td data-i18n="tls.ch.r6a">Beacon cada N segundos ± jitter</td><td>Malware C2 beacon</td><td data-i18n="tls.ch.r6c">Correlacionar JA3, volumen, threat intel del destino</td></tr>
+            <tr><td data-i18n="tls.ch.r7a">orig_bytes >> resp_bytes en TLS largo</td><td data-i18n="tls.ch.r7b">Exfiltración cifrada</td><td data-i18n="tls.ch.r7c">Alertar, correlacionar con DLP y accesos a archivos</td></tr>
+            <tr><td data-i18n="tls.ch.r8a">Cert nuevo para *.empresa.com en CT Logs</td><td data-i18n="tls.ch.r8b">Shadow IT o phishing preparatorio</td><td data-i18n="tls.ch.r8c">Verificar con el equipo, revocar si no autorizado</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="rec.labs">🎯 Referencias</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1573 — Encrypted Channel</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1573/" target="_blank" rel="noopener">→ attack.mitre.org/T1573</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1557 — Adversary-in-the-Middle</h4>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1557/" target="_blank" rel="noopener">→ attack.mitre.org/T1557</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">CVEs</div>
+          <h4>Heartbleed — CVE-2014-0160</h4>
+          <a class="recurso-link" href="https://heartbleed.com/" target="_blank" rel="noopener">→ heartbleed.com</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="../ssh/index.html">← SSH</a>
+        <a href="../index.html">Hub</a>
+        <span style="opacity:0.4" data-i18n="tls.workshopend">Fin del taller ✓</span>
+      </div>
+      <p data-i18n="footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-tls.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('tls-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('tls', 'demo');
+    });
+  </script>
+</body>
+</html>

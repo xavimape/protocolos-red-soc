@@ -1,0 +1,74 @@
+/*
+ * boton-dubstep.css
+ * Pill button con anillos pulsantes para .back-to-hub
+ * Color por módulo: cada página define --proto-color en <style>
+ *   DNS   → #00ff88  HTTP → #00d4ff  TCP  → #4488ff
+ *   (fallback: var(--accent))
+ */
+
+/* ── Animación de los anillos ── */
+@keyframes dubstep-ring {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* ── Pill button — override del estilo base de styles.css ── */
+.back-to-hub {
+  position: relative;
+  overflow: visible;
+  /* pill */
+  background: color-mix(in srgb, var(--proto-color, var(--accent)) 18%, transparent);
+  border: 1.5px solid var(--proto-color, var(--accent));
+  border-radius: 50px;
+  padding: 0.38rem 1rem;
+  /* texto */
+  color: var(--proto-color, var(--accent));
+  font-weight: 700;
+  /* espaciado con elementos adyacentes */
+  margin-right: 0.35rem;
+  /* transición */
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.back-to-hub:hover {
+  background: color-mix(in srgb, var(--proto-color, var(--accent)) 32%, transparent);
+  color: var(--proto-color, var(--accent));
+  border-color: var(--proto-color, var(--accent));
+}
+
+/* ── Anillos pulsantes ── */
+.back-to-hub::before,
+.back-to-hub::after {
+  content: '';
+  position: absolute;
+  inset: 0;                  /* misma caja que el pill */
+  border-radius: 50px;
+  border: 1.5px solid var(--proto-color, var(--accent));
+  opacity: 0;
+  pointer-events: none;
+  animation: dubstep-ring 2.5s ease-out infinite;
+}
+
+.back-to-hub::after {
+  animation-delay: 1.25s;
+}
+
+/* ── Hover: anillos rápidos ── */
+.back-to-hub:hover::before,
+.back-to-hub:hover::after {
+  animation-duration: 0.55s;
+  animation-delay: 0s;
+}
+
+/* ── Flecha: no cambia de color con el pill ── */
+.back-to-hub .back-arrow {
+  color: inherit;
+}
+
+/* ── Tema claro: asegurar legibilidad ── */
+[data-theme="light"] .back-to-hub {
+  background: color-mix(in srgb, var(--proto-color, var(--accent)) 15%, #fff);
+}
+[data-theme="light"] .back-to-hub:hover {
+  background: color-mix(in srgb, var(--proto-color, var(--accent)) 28%, #fff);
+}

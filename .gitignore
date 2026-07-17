@@ -1,0 +1,16 @@
+.DS_Store
+Thumbs.db
+*.log
+*.doc*
+node_modules/
+_backups_fixes/
+_backups_i18n_refactor/
+
+# ── Documentación interna de desarrollo (NO publicar) ──
+_contexto/
+FIXES_APLICADOS.md
+PLAN_DE_ACCION_BUGS.md
+informes-navegacion/
+1782032924476.jpg
+PLAN_DESARROLLO.md
+Informe_completo_de_analisis_y_mejoras_v2.md

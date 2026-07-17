@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>9 Protocolos y los Ataques que todo Analista SOC debe conocer</title>
+  <meta name="description" content="Laboratorio educativo interactivo: 9 protocolos de red, sus vectores de ataque y cómo detectarlos en un SOC. Teoría, demos, ejercicios y recursos." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <!-- Anti-flash: aplica tema antes del render -->
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <!-- Easter egg: Matrix Rain, solo visible al pasar el mouse por "by Javier Mapelli" -->
+  <canvas id="matrix-rain" aria-hidden="true"></canvas>
+
+  <!-- ── Header ── -->
+  <header class="site-header">
+    <div class="container">
+      <div class="site-brand">
+        <a href="index.html" class="site-logo">
+          <span class="logo-icon">🛡️</span>
+          <span>Protocolos<span class="accent">SOC</span></span>
+        </a>
+        <a href="https://github.com/xavimape" target="_blank" rel="noopener noreferrer" class="site-author">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+          by Javier Mapelli
+        </a>
+      </div>
+      <nav class="header-nav">
+        <a href="https://xavimape.github.io/clase-criptografia/" target="_blank" rel="noopener">clase-criptografia</a>
+        <a href="https://xavimape.github.io/criptografia-simetrica/" target="_blank" rel="noopener">criptografia-simetrica</a>
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <!-- Controles UI -->
+      <div class="ui-controls">
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Hero ── -->
+  <main>
+    <section class="hub-hero">
+      <div class="container">
+        <h1 data-i18n="hub.title">9 <span class="highlight">Protocolos</span> y los Ataques<br>que todo Analista SOC debe conocer</h1>
+        <p class="tagline" data-i18n="hub.tagline">🔍 Conoce el protocolo · ⚡ Entiende el riesgo · 🎯 Detecta el ataque</p>
+
+        <!-- Búsqueda -->
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="proto-search"
+            data-i18n="hub.search"
+            placeholder="Buscar protocolo o ataque... (ej: DNS tunneling, SYN flood)"
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Filtros por capa OSI -->
+        <div class="layer-filters">
+          <button class="filter-btn active" data-filter="all" data-i18n="hub.filter.all">Todos</button>
+          <button class="filter-btn" data-filter="Transporte" data-i18n="hub.filter.transport">Capa Transporte</button>
+          <button class="filter-btn" data-filter="Aplicación" data-i18n="hub.filter.app">Capa Aplicación</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Grid de 9 protocolos ── -->
+    <section class="container">
+      <div class="protocols-grid">
+
+        <!-- 1. DNS -->
+        <a href="dns/index.html"
+           class="proto-card"
+           data-module="dns"
+           data-name="dns"
+           data-layer="Aplicación"
+           data-attacks="envenenamiento poisoning tunneling tunel dga phishing amplification rebinding"
+           style="--proto-color: #00ff88;">
+          <div class="proto-card-header">
+            <div class="proto-number">1</div>
+            <span class="proto-layer-badge">L7 · UDP/53</span>
+          </div>
+          <div class="proto-name">DNS</div>
+          <div class="proto-fullname" data-i18n="card.dns.fullname">Sistema de Nombres de Dominio</div>
+          <p class="proto-desc" data-i18n="card.dns.desc">Resuelve nombres de dominio a direcciones IP. Base de toda comunicación en Internet.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">DNS Poisoning</span>
+            <span class="attack-tag">DNS Tunneling</span>
+            <span class="attack-tag">DGA / Phishing</span>
+            <span class="attack-tag">+3 más</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>7</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 2. HTTP/HTTPS -->
+        <a href="http/index.html"
+           class="proto-card"
+           data-module="http"
+           data-name="http https"
+           data-layer="Aplicación"
+           data-attacks="inyección sql xss cross-site scripting secuestro sesión session hijacking archivos maliciosos"
+           style="--proto-color: #00d4ff;">
+          <div class="proto-card-header">
+            <div class="proto-number">2</div>
+            <span class="proto-layer-badge">L7 · TCP/80,443</span>
+          </div>
+          <div class="proto-name">HTTP/HTTPS</div>
+          <div class="proto-fullname" data-i18n="card.http.fullname">Protocolo de Transferencia de Hipertexto</div>
+          <p class="proto-desc" data-i18n="card.http.desc">Protocolo de comunicación web. Base del tráfico de aplicaciones en Internet.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">XSS / SQLi</span>
+            <span class="attack-tag">CSRF / Session</span>
+            <span class="attack-tag">SSRF / LFI</span>
+            <span class="attack-tag">XXE</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>7</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 3. TCP -->
+        <a href="tcp/index.html"
+           class="proto-card"
+           data-module="tcp"
+           data-name="tcp"
+           data-layer="Transporte"
+           data-attacks="syn flood dos inundación secuestro session hijack rst injection escaneo puertos"
+           style="--proto-color: #4488ff;">
+          <div class="proto-card-header">
+            <div class="proto-number">3</div>
+            <span class="proto-layer-badge">L4 · IP</span>
+          </div>
+          <div class="proto-name">TCP</div>
+          <div class="proto-fullname" data-i18n="card.tcp.fullname">Protocolo de Control de Transmisión</div>
+          <p class="proto-desc" data-i18n="card.tcp.desc">Comunicación confiable orientada a conexión. Handshake de 3 vías.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">SYN Flood</span>
+            <span class="attack-tag">RST Injection</span>
+            <span class="attack-tag">ACK Flood</span>
+            <span class="attack-tag">TCP Spoofing</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>6</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 4. UDP -->
+        <a href="udp/index.html"
+           class="proto-card"
+           data-module="udp"
+           data-name="udp"
+           data-layer="Transporte"
+           data-attacks="udp flood inundación ddos amplificación dns ntp reflexión suplantación"
+           style="--proto-color: #aa44ff;">
+          <div class="proto-card-header">
+            <div class="proto-number">4</div>
+            <span class="proto-layer-badge">L4 · IP</span>
+          </div>
+          <div class="proto-name">UDP</div>
+          <div class="proto-fullname" data-i18n="card.udp.fullname">Protocolo de Datagramas de Usuario</div>
+          <p class="proto-desc" data-i18n="card.udp.desc">Comunicación rápida y sin conexión. Sin garantía de entrega.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">UDP / DNS Flood</span>
+            <span class="attack-tag">NTP Amplif.</span>
+            <span class="attack-tag">Memcached Amp.</span>
+            <span class="attack-tag">SSDP Amp.</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>6</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 5. DHCP -->
+        <a href="dhcp/index.html"
+           class="proto-card"
+           data-module="dhcp"
+           data-name="dhcp"
+           data-layer="Aplicación"
+           data-attacks="agotamiento starvation servidor malicioso rogue suplantación spoofing mitm man-in-the-middle"
+           style="--proto-color: #ff8800;">
+          <div class="proto-card-header">
+            <div class="proto-number">5</div>
+            <span class="proto-layer-badge">L7 · UDP/67,68</span>
+          </div>
+          <div class="proto-name">DHCP</div>
+          <div class="proto-fullname" data-i18n="card.dhcp.fullname">Protocolo de Configuración Dinámica de Host</div>
+          <p class="proto-desc" data-i18n="card.dhcp.desc">Asigna automáticamente configuración IP a dispositivos en la red.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">Starvation</span>
+            <span class="attack-tag">Rogue Server</span>
+            <span class="attack-tag">Option Spoofing</span>
+            <span class="attack-tag">MitM via DHCP</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>4</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 6. SMB -->
+        <a href="smb/index.html"
+           class="proto-card"
+           data-module="smb"
+           data-name="smb"
+           data-layer="Aplicación"
+           data-attacks="pass-the-hash pth ntlm relay eternalblue ms17-010 wannacry rce ejecución remota"
+           style="--proto-color: #ff4444;">
+          <div class="proto-card-header">
+            <div class="proto-number">6</div>
+            <span class="proto-layer-badge">L7 · TCP/445</span>
+          </div>
+          <div class="proto-name">SMB</div>
+          <div class="proto-fullname" data-i18n="card.smb.fullname">Bloque de Mensajes del Servidor</div>
+          <p class="proto-desc" data-i18n="card.smb.desc">Compartición de archivos y comunicación en redes Windows.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">Pass-the-Hash</span>
+            <span class="attack-tag">NTLM Relay</span>
+            <span class="attack-tag">EternalBlue</span>
+            <span class="attack-tag">PrintNightmare</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>6</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 7. FTP -->
+        <a href="ftp/index.html"
+           class="proto-card"
+           data-module="ftp"
+           data-name="ftp"
+           data-layer="Aplicación"
+           data-attacks="credenciales texto plano cleartext fuerza bruta acceso anónimo anonymous upload exploit"
+           style="--proto-color: #ffcc00;">
+          <div class="proto-card-header">
+            <div class="proto-number">7</div>
+            <span class="proto-layer-badge">L7 · TCP/20,21</span>
+          </div>
+          <div class="proto-name">FTP</div>
+          <div class="proto-fullname" data-i18n="card.ftp.fullname">Protocolo de Transferencia de Archivos</div>
+          <p class="proto-desc" data-i18n="card.ftp.desc">Transfiere archivos entre hosts. Inseguro por defecto (texto plano).</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">Cleartext Sniff</span>
+            <span class="attack-tag">Brute Force</span>
+            <span class="attack-tag">FTP Bounce</span>
+            <span class="attack-tag">FTPS Downgrade</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>6</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 8. SSH -->
+        <a href="ssh/index.html"
+           class="proto-card"
+           data-module="ssh"
+           data-name="ssh"
+           data-layer="Aplicación"
+           data-attacks="brute force fuerza bruta robo claves key theft tunneling c2 backdoor authorized_keys"
+           style="--proto-color: #00ffcc;">
+          <div class="proto-card-header">
+            <div class="proto-number">8</div>
+            <span class="proto-layer-badge">L7 · TCP/22</span>
+          </div>
+          <div class="proto-name">SSH</div>
+          <div class="proto-fullname" data-i18n="card.ssh.fullname">Secure Shell</div>
+          <p class="proto-desc" data-i18n="card.ssh.desc">Acceso remoto seguro y ejecución de comandos. Cifrado por defecto.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">Brute Force</span>
+            <span class="attack-tag">Key Theft</span>
+            <span class="attack-tag">C2 Tunneling</span>
+            <span class="attack-tag">Backdoor Keys</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>4</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+        <!-- 9. TLS/SSL -->
+        <a href="tls/index.html"
+           class="proto-card"
+           data-module="tls"
+           data-name="tls ssl"
+           data-layer="Transporte"
+           data-attacks="ssl stripping downgrade certificado invalido mitm cifrados débiles weak ciphers expirado ja3"
+           style="--proto-color: #ff44aa;">
+          <div class="proto-card-header">
+            <div class="proto-number">9</div>
+            <span class="proto-layer-badge">L5 · TCP/443</span>
+          </div>
+          <div class="proto-name">TLS/SSL</div>
+          <div class="proto-fullname" data-i18n="card.tls.fullname">Seguridad de la Capa de Transporte</div>
+          <p class="proto-desc" data-i18n="card.tls.desc">Cifra datos para comunicación segura. Base de HTTPS, SMTPS, FTPS.</p>
+          <div class="proto-attacks">
+            <span class="attack-tag">POODLE</span>
+            <span class="attack-tag">Heartbleed</span>
+            <span class="attack-tag">BEAST/CRIME</span>
+            <span class="attack-tag">Weak Ciphers</span>
+          </div>
+          <div class="proto-card-footer">
+            <div class="attack-count"><span>8</span> <span data-i18n="card.attacks">ataques</span></div>
+            <div class="proto-progress">
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+              <div class="progress-dot"></div>
+            </div>
+            <span class="proto-arrow">→</span>
+          </div>
+        </a>
+
+      </div><!-- /protocols-grid -->
+    </section>
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://xavimape.github.io/clase-criptografia/" target="_blank" rel="noopener">clase-criptografia</a>
+        <a href="https://xavimape.github.io/criptografia-simetrica/" target="_blank" rel="noopener">criptografia-simetrica</a>
+      </div>
+      <p data-i18n="hub.footer.license">@xavimape · Uso educativo y defensivo · MIT License</p>
+    </div>
+  </footer>
+
+  <script src="theme-switcher.js"></script>
+  <script src="i18n-core.js"></script>
+  <script src="shared.js"></script>
+  <script src="matrix-rain.js"></script>
+</body>
+</html>

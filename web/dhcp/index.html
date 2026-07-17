@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DHCP — Protocolos SOC</title>
+  <meta name="description" content="DHCP: asignación dinámica de IP, DHCP Starvation, Rogue DHCP, DHCP Snooping y detección en SOC." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="../boton-dubstep.css" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <style> :root { --proto-color: #ff8800; } </style>
+  <script>
+    (function(){
+      const t = localStorage.getItem('protocolos-soc-theme') || 'vision-ui';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="site-logo">
+        <span class="logo-icon">🛡️</span>
+        <span>Protocolos<span class="accent">SOC</span></span>
+      </a>
+      <nav class="header-nav">
+        <a href="https://github.com/xavimape/protocolos-red-soc" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+      </nav>
+      <div class="ui-controls">
+        <a href="../index.html" class="back-to-hub"><span class="back-arrow">←</span> <span data-i18n="nav.back">Inicio</span></a>
+        <select class="theme-select" id="theme-select" title="Cambiar tema"></select>
+        <button class="ctrl-btn" id="lang-toggle" title="Switch to English" onclick="i18n.toggleLang()">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-header">
+    <div class="container">
+      <div class="module-breadcrumb">
+        <a href="../index.html">Hub</a>
+        <span class="sep">›</span>
+        <span>DHCP</span>
+      </div>
+      <div class="module-title-row">
+        <div class="module-number-badge">5</div>
+        <div>
+          <div class="module-title">DHCP</div>
+          <div class="module-subtitle" data-i18n="dhcp.subtitle">Dynamic Host Configuration Protocol · UDP/67,68 · Capa de Aplicación</div>
+        </div>
+      </div>
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="demo"       onclick="SOC.switchTab('dhcp','demo')">       <span data-i18n="tab.demo">🧪 Demo Lab</span></button>
+        <button class="tab-btn"        data-tab="teoria"     onclick="SOC.switchTab('dhcp','teoria')">     <span data-i18n="tab.teoria">📖 Teoría</span></button>
+        <button class="tab-btn"        data-tab="ejercicios" onclick="SOC.switchTab('dhcp','ejercicios')"> <span data-i18n="tab.ejercicios">✏️ Ejercicios</span></button>
+        <button class="tab-btn"        data-tab="recursos"   onclick="SOC.switchTab('dhcp','recursos')">   <span data-i18n="tab.recursos">📚 Recursos</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ── Tab: Demo Lab ── -->
+    <div class="tab-content active" data-tab="demo">
+
+      <!-- Demo 1: DORA handshake -->
+      <div class="demo-container">
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="dhcp.demo.dora.title">DHCP DORA — Asignación de IP</span>
+            <span class="badge badge-info">UDP/67,68</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-input-group">
+              <label data-i18n="dhcp.demo.dora.client">MAC del cliente:</label>
+              <input type="text" id="dhcp-mac" value="aa:bb:cc:dd:ee:ff" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="dhcp.demo.dora.server">IP del servidor DHCP:</label>
+              <input type="text" id="dhcp-server" value="192.168.1.1" />
+            </div>
+            <div class="demo-input-group">
+              <label data-i18n="dhcp.demo.dora.pool">Pool DHCP:</label>
+              <input type="text" id="dhcp-pool" value="192.168.1.100-200" />
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="dhcpDemo.runDORA()" data-i18n="dhcp.demo.btn.dora">▶ Simular DORA</button>
+              <button class="btn btn-secondary" onclick="dhcpDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-panel">
+          <div class="demo-panel-header">
+            <div class="dot-row"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+            <span class="panel-title" data-i18n="dhcp.demo.dora.output">Intercambio DHCP</span>
+          </div>
+          <div class="demo-panel-body">
+            <div class="demo-output" id="dhcp-output">
+              <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="dhcp.demo.waiting">Esperando simulación DHCP...</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 2: DHCP Starvation -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dhcp.demo.starv.title">⚠️ Demo: DHCP Starvation</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dhcp.demo.starv.desc">
+          El atacante envía cientos de DHCP DISCOVER con MACs falsas hasta agotar el pool de IPs. El servidor legítimo no puede asignar IPs a clientes reales (DoS). Herramienta típica: Yersinia.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dhcp.demo.starv.panel">Configurar ataque</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.starv.server">Servidor DHCP víctima:</label>
+                <input type="text" id="starv-server" value="192.168.1.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.starv.pool">Tamaño del pool:</label>
+                <select id="starv-pool">
+                  <option value="50" data-i18n="dhcp.opt1">50 IPs (red pequeña)</option>
+                  <option value="254" selected data-i18n="dhcp.opt2">254 IPs (/24 estándar)</option>
+                  <option value="1022">1022 IPs (/22)</option>
+                </select>
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.starv.rate">Tasa de DISCOVER:</label>
+                <select id="starv-rate">
+                  <option value="10" data-i18n="dhcp.opt3">10 req/s (silencioso)</option>
+                  <option value="100" selected data-i18n="dhcp.opt4">100 req/s (agresivo)</option>
+                  <option value="1000">1000 req/s (Yersinia)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dhcpDemo.runStarvation()" data-i18n="dhcp.demo.btn.starv">▶ Simular Starvation</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dhcp.demo.starv.state">Estado del pool DHCP</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="starv-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="dhcp.demo.waiting">Esperando simulación DHCP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo 3: Rogue DHCP -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dhcp.demo.rogue.title">🎭 Demo: Rogue DHCP Server (MitM)</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dhcp.demo.rogue.desc">
+          Después del starvation (o directamente), el atacante levanta un servidor DHCP falso. Las víctimas obtienen una IP válida pero con gateway y DNS controlados por el atacante — Man-in-the-Middle perfecto.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dhcp.demo.rogue.panel">Configurar Rogue DHCP</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.rogue.attacker">IP del atacante / Rogue GW:</label>
+                <input type="text" id="rogue-gw" value="192.168.1.200" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.rogue.dns">DNS malicioso (sinkhole):</label>
+                <input type="text" id="rogue-dns" value="10.0.0.1" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.rogue.victim">Víctima a secuestrar:</label>
+                <input type="text" id="rogue-victim" value="aa:11:22:33:44:55" />
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dhcpDemo.runRogue()" data-i18n="dhcp.demo.btn.rogue">▶ Simular Rogue DHCP</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dhcp.demo.rogue.result">Resultado del secuestro</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="rogue-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="dhcp.demo.waiting">Esperando simulación DHCP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Demo 4: DHCP Spoofing / Option 82 Abuse -->
+      <div class="mt-3">
+        <div class="section-title" data-i18n="dhcp.demo.spoof.title">🔧 Demo: DHCP Option Spoofing</div>
+        <p class="text-secondary mb-2" style="font-size:0.88rem;" data-i18n="dhcp.demo.spoof.desc">
+          Un atacante manipula las opciones DHCP (gateway, DNS, dominio) para redirigir tráfico o envenenar la configuración de red de los clientes sin desplegar un servidor DHCP falso completo.
+        </p>
+        <div class="demo-container">
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dhcp.demo.spoof.panel">Configurar DHCP Spoofing</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.spoof.target">Red objetivo:</label>
+                <input type="text" id="spoof-network" value="192.168.1.0/24" />
+              </div>
+              <div class="demo-input-group">
+                <label data-i18n="dhcp.demo.spoof.type">Tipo de spoofing:</label>
+                <select id="spoof-type">
+                  <option value="dns" selected data-i18n="dhcp.opt5">DNS Spoofing (opción 6)</option>
+                  <option value="gateway" data-i18n="dhcp.opt6">Gateway Spoofing (opción 3) — MitM</option>
+                  <option value="domain" data-i18n="dhcp.opt7">Domain Spoofing (opción 15)</option>
+                  <option value="ntp" data-i18n="dhcp.opt8">NTP Spoofing (opción 42)</option>
+                </select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" onclick="dhcpDemo.runSpoof()" data-i18n="dhcp.demo.btn.spoof">▶ Simular Spoofing</button>
+                <button class="btn btn-secondary" onclick="dhcpDemo.reset()" data-i18n="btn.reset">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">
+              <span class="panel-title" data-i18n="dhcp.demo.spoof.result">Resultado del spoofing</span>
+            </div>
+            <div class="demo-panel-body">
+              <div class="demo-output" id="spoof-output" style="min-height:180px;">
+                <div class="log-line"><span class="log-time">[→]</span><span class="log-info" data-i18n="dhcp.demo.waiting">Esperando simulación DHCP...</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab demo -->
+
+    <!-- ── Tab: Teoría ── -->
+    <div class="tab-content" data-tab="teoria">
+      <div class="slides-container" id="dhcp-slides">
+
+        <div class="slide active">
+          <span class="slide-number">1 / 8</span>
+          <h2 data-i18n="dhcp.s1.title">¿Qué es DHCP?</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s1.sub">Asignación automática de configuración de red</p>
+          <p data-i18n="dhcp.s1.p1">DHCP (Dynamic Host Configuration Protocol) permite que un host obtenga automáticamente su configuración de red sin intervención manual: dirección IP, máscara, gateway por defecto, servidores DNS y tiempo de lease.</p>
+          <div class="callout">
+            <strong data-i18n="dhcp.s1.what.title">DHCP asigna:</strong>
+            <ul style="margin-top:0.5rem;">
+              <li data-i18n="dhcp.s1.w1">📍 <strong>IP address</strong> — única dentro del segmento</li>
+              <li data-i18n="dhcp.s1.w2">🔢 <strong>Subnet mask</strong> — delimita la red local</li>
+              <li data-i18n="dhcp.s1.w3">🚪 <strong>Default gateway</strong> — router de salida (punto crítico para MitM)</li>
+              <li data-i18n="dhcp.s1.w4">🔍 <strong>DNS servers</strong> — resolución de nombres (punto crítico para DNS hijacking)</li>
+              <li data-i18n="dhcp.s1.w5">⏳ <strong>Lease time</strong> — cuánto tiempo es válida la asignación</li>
+              <li data-i18n="dhcp.s1.w6">➕ <strong>Opciones adicionales</strong> — WINS, NTP, dominio de búsqueda</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">2 / 8</span>
+          <h2 data-i18n="dhcp.s2.title">El proceso DORA</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s2.sub">Discover → Offer → Request → Acknowledge</p>
+          <pre data-i18n="dhcp.pre0">
+Cliente (0.0.0.0)               Servidor DHCP (192.168.1.1)
+      │                                    │
+      │── DISCOVER (broadcast) ───────────►│  src=0.0.0.0:68 dst=255.255.255.255:67
+      │   "¿Hay algún DHCP en la red?"     │  MAC: aa:bb:cc:dd:ee:ff
+      │                                    │
+      │◄──── OFFER ─────────────────────── │  "Te ofrezco 192.168.1.105/24"
+      │   IP=192.168.1.105                 │  GW=192.168.1.1  DNS=8.8.8.8
+      │   Lease=86400s (24h)               │
+      │                                    │
+      │── REQUEST (broadcast) ────────────►│  "Acepto la oferta de 192.168.1.1"
+      │   Requested IP=192.168.1.105       │  (broadcast para que otros DHCP vean)
+      │                                    │
+      │◄──── ACK ───────────────────────── │  "Confirmado. IP tuya por 86400s"
+      │   Configuración completa           │
+      │                                    │
+  CONFIGURA interfaz con IP+GW+DNS asignados</pre>
+          <div class="callout warning" data-i18n="dhcp.s2.callout">
+            <strong>Sin autenticación:</strong> DHCP no tiene mecanismo de autenticación nativo. Cualquier máquina en la red puede responder OFFERS. El cliente acepta la primera OFFER que llegue — o la más rápida.
+          </div>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">3 / 8</span>
+          <h2 data-i18n="dhcp.s3.title">Ataque 1: DHCP Starvation</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s3.sub">Agotamiento del pool de IPs — DoS</p>
+          <p data-i18n="dhcp.s3.p1">El atacante envía miles de DHCP DISCOVER con <strong>MACs falsas aleatorias</strong>. Cada DISCOVER reserva una IP del pool. Cuando el pool se agota, clientes legítimos no pueden obtener IP y quedan sin red.</p>
+          <pre data-i18n="dhcp.pre1">
+Atacante (herramienta: Yersinia / dhcpstarv)
+  │
+  ├── DISCOVER  src_mac=aa:bb:cc:11:11:11  "dame IP"
+  ├── DISCOVER  src_mac=aa:bb:cc:22:22:22  "dame IP"
+  ├── DISCOVER  src_mac=aa:bb:cc:33:33:33  "dame IP"
+  │   ... × 254 veces en segundos ...
+  │
+  ▼  POOL AGOTADO
+
+  Cliente legítimo:
+  ├── DISCOVER  src_mac=aa:bb:cc:real:mac  "dame IP"
+  └── ← (sin respuesta — pool vacío)  → ¡Sin red!</pre>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1498</strong> — Network Denial of Service · CAPEC-61</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">4 / 8</span>
+          <h2 data-i18n="dhcp.s4.title">Ataque 2: Rogue DHCP Server</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s4.sub">Man-in-the-Middle mediante configuración de red maliciosa</p>
+          <p data-i18n="dhcp.s4.p1">El atacante levanta un servidor DHCP en la red (a veces después de un starvation). Los clientes reciben configuración de red con el <strong>gateway y DNS del atacante</strong>. Todo el tráfico pasa por el atacante antes de salir a Internet.</p>
+          <pre data-i18n="dhcp.pre2">
+NORMAL:   Cliente → [GW real 192.168.1.1] → Internet
+
+ROGUE:    Cliente → [GW atacante 192.168.1.200] → [GW real] → Internet
+                          ↑
+                    ARP, sniff, inyección, SSL strip
+                    DNS falso → sinkhole / phishing
+
+DHCP OFFER malicioso:
+  IP=192.168.1.105  ← IP válida (para no levantar sospechas)
+  Gateway=192.168.1.200  ← IP del atacante
+  DNS=10.0.0.1  ← DNS malicioso del atacante
+  Lease=300s  ← lease corto para renovar rápido</pre>
+          <div class="callout danger" data-i18n="dhcp.s4.callout">
+            <strong>Impacto:</strong> captura de credenciales, tokens de sesión, datos sensibles. Redirección silenciosa a sitios de phishing. El usuario no nota nada — la navegación parece funcionar.
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">MITRE ATT&CK: <strong>T1557.003</strong> — Adversary-in-the-Middle: DHCP Spoofing</p>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">5 / 8</span>
+          <h2 data-i18n="dhcp.s5.title">Ataque 3: DHCP Starvation + Rogue combinado</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s5.sub">El ataque completo en dos fases</p>
+          <pre data-i18n="dhcp.pre3">
+FASE 1 — STARVATION (silenciar el DHCP legítimo):
+  └─ Enviar DISCOVER con cientos de MACs falsas
+     → Pool del DHCP legítimo = agotado
+     → Clientes que piden IP no obtienen respuesta del DHCP real
+
+FASE 2 — ROGUE DHCP (tomar el control):
+  └─ Levantar DHCP falso que SOLUCIONA el problema
+     → Responde rápido con configuración "válida"
+     → Desesperados por red, los clientes aceptan la oferta
+     → Todos los nuevos hosts → gateway=atacante
+
+RESULTADO: MitM total sin alertas evidentes
+  → Clientes con red funcional (no sospechan)
+  → Todo el tráfico pasa por el atacante
+  → Atacante puede HTTPS strip, SSLstrip, capturar credenciales
+
+DETECCIÓN:
+  → Dos servidores DHCP en el mismo segmento (IOC fuerte)
+  → DHCP leases con gateway distinto al esperado
+  → Súbita tasa alta de DISCOVER desde una MAC</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">6 / 8</span>
+          <h2 data-i18n="dhcp.s6.title">Defensa: DHCP Snooping</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s6.sub">El switch como árbitro de DHCP</p>
+          <p data-i18n="dhcp.s6.p1">DHCP Snooping es una función de seguridad de switches que clasifica los puertos en <strong>trusted</strong> (solo hacia servidores DHCP legítimos) y <strong>untrusted</strong> (hacia clientes).</p>
+          <pre data-i18n="dhcp.pre4">
+Switch con DHCP Snooping habilitado:
+
+[Puerto Uplink — TRUSTED]         [Puertos de acceso — UNTRUSTED]
+  ↕ DHCP OFFER permitido              ↕ Solo DISCOVER/REQUEST (cliente)
+  ↕ DHCP ACK permitido                ✗ OFFER/ACK bloqueado (evita rogue)
+  ↕ DHCP DISCOVER permitido           ✗ MACs falsas → rate limit + drop
+
+Cisco IOS:
+  ip dhcp snooping
+  ip dhcp snooping vlan 10
+  interface GigabitEthernet0/1   ← hacia clientes
+    ip dhcp snooping limit rate 15   ← máx 15 paquetes DHCP/s
+  interface GigabitEthernet0/24  ← hacia servidor DHCP real
+    ip dhcp snooping trust
+
+DHCP Snooping Binding Table:
+  MAC address   IP addr        Lease   VLAN  Interface
+  aa:bb:cc...   192.168.1.105  86400s  10    Gi0/5
+  → Usada por ARP Inspection + IP Source Guard para validar tráfico</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">7 / 8</span>
+          <h2 data-i18n="dhcp.s7.title">DHCP en telemetría SOC</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s7.sub">Zeek dhcp.log — el log más útil para identidad de hosts</p>
+          <pre data-i18n="dhcp.pre5">
+# Zeek dhcp.log — campos clave
+ts       client_addr  server_addr  mac                assigned_ip   lease_time
+10:00:01 0.0.0.0      255.255.255  aa:bb:cc:dd:ee:ff  192.168.1.105 86400
+10:00:01 0.0.0.0      255.255.255  aa:bb:cc:dd:ee:ff  192.168.1.105 86400  ← mismo host, OK
+
+# IOC: Starvation — muchas MACs distintas solicitando IPs
+ts       mac                      msg_type
+10:05:00 aa:bb:cc:00:00:01        DISCOVER
+10:05:00 aa:bb:cc:00:00:02        DISCOVER   ← OUI igual, octeto final incremental
+10:05:00 aa:bb:cc:00:00:03        DISCOVER   ← Yersinia pattern!
+... × 254 en 3 segundos
+
+# IOC: Rogue DHCP — dos servidores distintos
+ts       server_addr   assigned_ip    gateway
+10:10:00 192.168.1.1   192.168.1.106  192.168.1.1    ← legítimo
+10:10:01 192.168.1.200 192.168.1.107  192.168.1.200  ← ROGUE!
+
+# Sigma — Rogue DHCP detection
+title: Rogue DHCP Server Detected
+detection:
+  selection:
+    dhcp_type: OFFER
+  condition: selection | distinct_count(server_addr) by vlan > 1
+level: high  tags: [T1557.003]</pre>
+        </div>
+
+        <div class="slide">
+          <span class="slide-number">8 / 8</span>
+          <h2 data-i18n="dhcp.s8.title">Detección y mitigación completa</h2>
+          <p class="slide-subtitle" data-i18n="dhcp.s8.sub">Checklist para SOC + networking</p>
+          <ul>
+            <li>🔒 <strong data-i18n="dhcp.s8.m1">DHCP Snooping</strong> en todos los switches de acceso — bloquea OFFER desde puertos untrusted</li>
+            <li>🔍 <strong data-i18n="dhcp.s8.m2">Dynamic ARP Inspection</strong> — valida ARP contra la DHCP Snooping Binding Table</li>
+            <li>🛡️ <strong data-i18n="dhcp.s8.m3">IP Source Guard</strong> — filtra paquetes cuya IP/MAC no coincide con la tabla de snooping</li>
+            <li>📊 <strong data-i18n="dhcp.s8.m4">Monitorear Zeek dhcp.log</strong> — alertar ante múltiples servidores DHCP o tasa alta de DISCOVER desde misma MAC base</li>
+            <li>⚠️ <strong data-i18n="dhcp.s8.m5">Rate limiting DHCP</strong> — máx 10-15 paquetes DHCP/s por puerto</li>
+            <li>🔐 <strong data-i18n="dhcp.s8.m6">802.1X / NAC</strong> — autenticación antes de acceso a red (elimina el problema de raíz)</li>
+            <li>📋 <strong data-i18n="dhcp.s8.m7">Auditar leases</strong> — comparar gateway en leases vs gateway esperado; alertar ante discrepancias</li>
+          </ul>
+        </div>
+
+      </div>
+      <div class="slides-nav">
+        <button class="btn btn-secondary btn-prev" disabled data-i18n="btn.prev">← Anterior</button>
+        <div class="slides-progress"></div>
+        <button class="btn btn-primary btn-next" data-i18n="btn.next">Siguiente →</button>
+      </div>
+    </div><!-- /tab teoria -->
+
+    <!-- ── Tab: Ejercicios ── -->
+    <div class="tab-content" data-tab="ejercicios">
+      <div class="ejercicios-list">
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-01</span>
+            <span class="ejercicio-title" data-i18n="dhcp.ej1.title">Identificar fase DORA</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dhcp.ej1.q">Para cada paquete capturado, indicá qué fase DORA es y qué información contiene:</p>
+            <pre>
+Paquete 1: src=0.0.0.0:68  dst=255.255.255.255:67
+  msg_type=1  chaddr=de:ad:be:ef:00:01
+  requested_ip=0.0.0.0  server_id=0.0.0.0
+
+Paquete 2: src=192.168.1.1:67  dst=255.255.255.255:68
+  msg_type=2  yiaddr=192.168.1.110
+  options: lease=86400, gw=192.168.1.1, dns=8.8.8.8
+
+Paquete 3: src=0.0.0.0:68  dst=255.255.255.255:67
+  msg_type=3  chaddr=de:ad:be:ef:00:01
+  requested_ip=192.168.1.110  server_id=192.168.1.1
+
+Paquete 4: src=192.168.1.1:67  dst=192.168.1.110:68
+  msg_type=5  yiaddr=192.168.1.110  lease=86400</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+Paquete 1: DISCOVER
+  → Fase D: el cliente (MAC de:ad:be:ef:00:01) busca servidores DHCP
+  → src=0.0.0.0 porque aún no tiene IP
+  → dst=255.255.255.255 (broadcast) para alcanzar cualquier DHCP
+  → msg_type=1 = DHCPDISCOVER
+
+Paquete 2: OFFER
+  → Fase O: el servidor (192.168.1.1) ofrece la IP 192.168.1.110
+  → yiaddr = "your IP address" = IP ofrecida al cliente
+  → Incluye parámetros: lease 24h, gateway, DNS
+  → msg_type=2 = DHCPOFFER
+
+Paquete 3: REQUEST
+  → Fase R: el cliente acepta la oferta y la solicita formalmente
+  → server_id=192.168.1.1: dice explícitamente a qué servidor acepta
+    (otros servidores DHCP que también ofrecieron pueden retirar su oferta)
+  → Sigue siendo broadcast para que todos los DHCP se enteren
+  → msg_type=3 = DHCPREQUEST
+
+Paquete 4: ACK (Acknowledge)
+  → Fase A: el servidor confirma la asignación definitiva
+  → yiaddr=192.168.1.110: la IP es tuya
+  → lease=86400s: válida por 24h
+  → msg_type=5 = DHCPACK
+  → A partir de aquí el cliente configura su interfaz
+
+DATO: msg_type=6 sería DHCPNACK (servidor rechaza la solicitud,
+por ejemplo si la IP ya fue asignada a otro)
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-02</span>
+            <span class="ejercicio-title" data-i18n="dhcp.ej2.title">¿Por qué DHCP Starvation no siempre necesita starvation previo?</span>
+            <span class="ejercicio-difficulty dif-easy" data-i18n="ej.easy">Fácil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dhcp.ej2.q">Un atacante quiere hacer Rogue DHCP sin ejecutar el starvation primero. ¿Es posible? ¿Bajo qué condiciones funciona y cuándo no? ¿Qué ventaja tiene hacerlo con starvation previo?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+SÍ, el Rogue DHCP funciona SIN starvation previo cuando:
+  → El atacante responde más rápido que el servidor legítimo
+  → El cliente acepta la PRIMERA oferta que recibe
+  → Si el rogue DHCP está en la misma LAN, tiene menor latencia que
+    un servidor en otro segmento o cargado con muchas solicitudes
+
+CONDICIONES DONDE FUNCIONA SIN STARVATION:
+  1. Red con muchos clientes: el servidor DHCP legítimo está ocupado
+     y tarda más en responder → el rogue gana la carrera
+  2. Rogue en el mismo switch: menor latencia física
+  3. Lease corto (300s): las renovaciones son frecuentes → más oportunidades
+  4. Nuevos dispositivos conectándose: primera vez en la red
+
+CONDICIONES DONDE NO FUNCIONA:
+  → El cliente ya tiene un lease válido y no busca nuevo DHCP
+  → El servidor legítimo es más rápido y el cliente recibe su oferta primero
+  → El switch tiene DHCP Snooping activo (bloquea el OFFER del rogue)
+
+VENTAJA DE HACERLO CON STARVATION PREVIO:
+  → El servidor legítimo NO PUEDE responder (pool vacío, sin IPs para ofrecer)
+  → El rogue es el único que puede dar IP → el cliente no tiene otra opción
+  → Garantiza el 100% de las víctimas en vez de depender de velocidad
+  → Mucho más efectivo en redes bien configuradas
+
+CASO ESPECIAL — renovación de lease:
+  Al 50% del lease (T1), el cliente envía DHCPREQUEST al servidor original.
+  Si el server legítimo no puede renovar (pool agotado), el rogue
+  puede interceptar con DHCPNACK + nueva OFFER maliciosa.
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-03</span>
+            <span class="ejercicio-title" data-i18n="dhcp.ej3.title">Análisis de Zeek dhcp.log — detectar el ataque</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dhcp.ej3.q">Analizá este extracto de Zeek dhcp.log. Identificá qué ataques están ocurriendo y qué hosts son sospechosos:</p>
+            <pre>
+ts        mac                 server        assigned_ip    gateway
+09:00:01  aa:bb:cc:10:00:01   192.168.1.1   192.168.1.101  192.168.1.1
+09:00:05  aa:bb:cc:10:00:02   192.168.1.1   192.168.1.102  192.168.1.1
+09:02:00  f8:1e:df:aa:00:01   192.168.1.1   192.168.1.103  192.168.1.1
+09:05:00  52:54:00:11:22:01   192.168.1.1   —  (no OFFER)
+09:05:00  52:54:00:11:22:02   192.168.1.1   —  (no OFFER)
+09:05:01  52:54:00:11:22:03   192.168.1.1   —  (no OFFER)
+... (254 entradas en 4 segundos, todas 52:54:00:11:22:XX)
+09:05:30  aa:bb:cc:real:mac   192.168.1.1   —  (no OFFER — pool agotado)
+09:06:00  aa:bb:cc:real:mac   192.168.1.99  192.168.1.150  192.168.1.99 ← rogue!</pre>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+ATAQUE 1: DHCP STARVATION (09:05:00 - 09:05:04)
+
+Evidencia:
+  → 254 DISCOVER en 4 segundos = tasa anormal (63 req/s)
+  → Todas las MACs tienen el mismo OUI (52:54:00 = QEMU/KVM virtualbox)
+    y solo varía el último octeto en secuencia: 01, 02, 03...
+  → Este patrón es característico de herramientas como Yersinia o dhcpstarv
+  → Resultado: "no OFFER" → el servidor legítimo agotó su pool
+
+Host sospechoso: quien tiene MAC 52:54:00:11:22:XX
+  → Buscar port en switch donde ese OUI apareció
+  → Correlacionar con VLAN / puerto físico
+
+ATAQUE 2: ROGUE DHCP SERVER (09:06:00)
+
+Evidencia:
+  → aa:bb:cc:real:mac obtiene respuesta de 192.168.1.99 (no del DHCP legítimo 192.168.1.1)
+  → El gateway asignado es 192.168.1.99 (= el servidor rogue = el atacante)
+  → Este host configurará su tráfico hacia 192.168.1.99 → MitM activo
+
+Host atacante: 192.168.1.99 (servidor DHCP no autorizado)
+  → Buscar qué equipo tiene esta IP → puerto del switch → aislar
+
+ACCIONES:
+  1. Aislar el puerto con 52:54:00:11:22:XX del switch
+  2. Aislar el puerto con 192.168.1.99
+  3. Revisar si aa:bb:cc:real:mac recibió tráfico redirigido
+  4. Alertar: "ROGUE DHCP + STARVATION en VLAN X a las 09:05"
+  5. Verificar si otros hosts recibieron gateway=192.168.1.99
+     → SELECT mac, gateway FROM dhcp.log WHERE gateway != "192.168.1.1"
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-04</span>
+            <span class="ejercicio-title" data-i18n="dhcp.ej4.title">Configurar DHCP Snooping en Cisco</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dhcp.ej4.q">Tenés un switch Cisco Catalyst con: puertos Gi0/1–Gi0/20 conectados a clientes, Gi0/24 conectado al router/DHCP server, VLAN 10. Escribí la configuración completa de DHCP Snooping + DAI + rate limiting.</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+! ─── DHCP Snooping ───────────────────────────────────────────
+ip dhcp snooping
+ip dhcp snooping vlan 10
+no ip dhcp snooping information option  ! evita problemas con Option 82
+
+! Puerto hacia servidor DHCP legítimo = TRUSTED
+interface GigabitEthernet0/24
+ ip dhcp snooping trust
+
+! Puertos de clientes = UNTRUSTED + rate limiting
+interface range GigabitEthernet0/1 - 20
+ ip dhcp snooping limit rate 15   ! máx 15 paquetes DHCP/s
+ ! Si se supera el rate → interfaz en err-disabled automáticamente
+
+! ─── Dynamic ARP Inspection (DAI) ────────────────────────────
+ip arp inspection vlan 10
+ip arp inspection validate src-mac dst-mac ip   ! validar todos los campos
+
+interface GigabitEthernet0/24
+ ip arp inspection trust   ! el uplink es trusted para ARP también
+
+! ─── IP Source Guard ──────────────────────────────────────────
+interface range GigabitEthernet0/1 - 20
+ ip verify source   ! filtra paquetes cuya IP no está en snooping binding
+
+! ─── Verificación ─────────────────────────────────────────────
+show ip dhcp snooping binding       ! tabla MAC-IP-lease-VLAN-port
+show ip dhcp snooping statistics    ! paquetes dropped/forwarded
+show ip arp inspection statistics   ! ARP drops por DAI
+show ip verify source               ! binding de IP Source Guard
+
+! ─── Recuperar interfaz si entra en err-disabled ──────────────
+errdisable recovery cause dhcp-rate-limit
+errdisable recovery interval 300   ! intenta recuperar cada 5min
+
+! IMPORTANTE: si el switch tiene Option 82 activado por otro
+! motivo (RADIUS, etc.) y necesitás mantenerlo:
+! ip dhcp snooping information option → NO deshabilitarlo
+! y configurar el DHCP server para aceptar Option 82
+            </div>
+          </div>
+        </div>
+
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-05</span>
+            <span class="ejercicio-title" data-i18n="dhcp.ej5.title">¿Cómo saber si ya hay un MitM activo vía DHCP rogue?</span>
+            <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dhcp.ej5.q">Ya pasó el ataque y sospechás que hay un MitM activo. ¿Cómo confirmás que las víctimas están siendo interceptadas? ¿Cómo determinás el alcance (cuántos hosts afectados)?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+PASO 1 — Identificar si hay un servidor DHCP no autorizado:
+
+En el switch:
+  show ip dhcp snooping binding | grep -v "192.168.1.1"
+  → IPs asignadas por servidores distintos al legítimo
+
+Desde Zeek dhcp.log:
+  zeek-cut ts server_addr mac assigned_ip gateway < dhcp.log \
+    | awk '$3 != "192.168.1.1"'  → muestra todos los leases no legítimos
+
+Escaneo de red:
+  nmap -sU -p 67 192.168.1.0/24
+  → Múltiples hosts respondiendo en UDP/67 = múltiples DHCP servers
+
+PASO 2 — Determinar hosts comprometidos (con GW malicioso):
+
+Desde cualquier host de la red:
+  cat /var/lib/dhcp/dhclient.leases    (Linux)
+  ipconfig /all                         (Windows — ver "Default Gateway")
+  → Comparar el gateway obtenido vs el gateway esperado (192.168.1.1)
+
+Desde el SIEM con Zeek dhcp.log:
+  Buscar: WHERE gateway_offered != "192.168.1.1"
+  → Lista de MACs + IPs que recibieron gateway malicioso
+
+PASO 3 — Confirmar que hay intercepción activa:
+
+En un host afectado:
+  traceroute 8.8.8.8
+  → ¿El primer salto es el GW esperado (192.168.1.1) o el rogue (192.168.1.99)?
+
+  arp -n | grep "192.168.1.1"
+  → ¿La MAC del gateway es la esperada del router real?
+  → Si la MAC es diferente = ARP poisoning activo también
+
+En Zeek conn.log:
+  Buscar tráfico 192.168.1.99 como origen hacia Internet
+  → Si está reenviando tráfico de otros hosts = confirmado MitM
+
+PASO 4 — Alcance total:
+
+  # Cuántos hosts únicos recibieron gateway malicioso
+  zeek-cut mac gateway < dhcp.log \
+    | awk '$2 != "192.168.1.1"' | cut -f1 | sort -u | wc -l
+
+  # Cuánto tiempo estuvieron expuestos
+  zeek-cut ts mac gateway < dhcp.log \
+    | awk '$3 == "192.168.1.99"' | sort -k1 | head -1
+  → El timestamp más antiguo con gateway rogue = inicio de la exposición
+
+RESPUESTA:
+  1. Aislar 192.168.1.99 del switch inmediatamente
+  2. Lista de hosts afectados → forzar renovación DHCP (ipconfig /release + /renew)
+  3. Investigar qué tráfico capturó el atacante (análisis forense de .99)
+  4. Notificar usuarios: posible exposición de credenciales HTTP/no-HTTPS
+  5. Forzar cambio de contraseñas de sistemas accedidos desde hosts afectados
+  6. Revisar si el atacante tenía acceso físico o era un host comprometido
+            </div>
+          </div>
+        </div>
+
+        <!-- EJ-06 -->
+        <div class="ejercicio-card">
+          <div class="ejercicio-header">
+            <span class="ejercicio-number">EJ-06</span>
+            <span class="ejercicio-title" data-i18n="dhcp.ej6.title">DHCP Option Spoofing — identificar la opción maliciosa</span>
+            <span class="ejercicio-difficulty dif-medium" data-i18n="ej.medium">Medio</span>
+          </div>
+          <div class="ejercicio-body">
+            <p data-i18n="dhcp.ej6.q">En un DHCP ACK capturado con Wireshark ves estas opciones: Option 1 (Subnet Mask): 255.255.255.0 | Option 3 (Router): 10.0.0.99 | Option 6 (DNS): 10.0.0.99 | Option 15 (Domain): evil-corp.local | Option 51 (Lease): 300s. El gateway legítimo de la red es 10.0.0.1. (a) ¿Qué opciones son maliciosas? (b) ¿Qué ataque representa cada una? (c) ¿Por qué el lease time de 300s es sospechoso? (d) ¿Cómo detectarías esto con Zeek?</p>
+            <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver respuesta</button>
+            <div class="respuesta-box">
+(a) OPCIONES MALICIOSAS:
+  Option 3 (Router/Gateway): 10.0.0.99  esperado: 10.0.0.1 → MitM activo
+  Option 6 (DNS): 10.0.0.99             DNS del atacante → DNS spoofing
+  Option 15 (Domain): evil-corp.local   dominio falso → NTLM hash capture
+  (Option 1 es legítima; Option 51 con 300s es sospechosa pero no definitiva)
+
+(b) ATAQUE POR OPCION:
+  Option 3 → Gateway spoofing (T1557.003): todo el tráfico pasa por 10.0.0.99
+              El atacante intercepta HTTP/HTTPS, credenciales, cookies
+  Option 6 → DNS spoofing: el cliente resuelve nombres via 10.0.0.99
+              Permite redirigir paypal.com, intranet, etc. a IPs del atacante
+  Option 15 → Domain spoofing: el cliente intenta autenticarse en evil-corp.local
+               Responder captura los hashes NTLM enviados automáticamente
+
+(c) LEASE TIME DE 300s (5 MINUTOS):
+  El lease corporativo estándar es 8-24h. Un lease corto fuerza que el cliente
+  renueve DHCP cada 5 minutos, dando al atacante múltiples oportunidades de
+  inyectar opciones. También dificulta rastrear el inicio del ataque en logs.
+
+(d) DETECCION CON ZEEK (dhcp.log):
+  # Servidor DHCP no autorizado
+  zeek-cut server_addr | sort -u
+    → Si ves 10.0.0.99 además de 10.0.0.1 = rogue confirmado
+
+  # Gateway sospechoso
+  zeek-cut mac assigned_ip gateway | awk '$3 != "10.0.0.1"'
+
+  # DNS externo o interno inusual
+  zeek-cut mac dns | grep -v "10.0.0.1\|8.8.8.8"
+
+  # Lease time anomalo (menos de 30 min)
+  zeek-cut mac lease_time | awk '$2 < 1800'
+
+  # Dominio inesperado
+  zeek-cut mac domain | grep -v "empresa.local"
+
+MITIGACION:
+  - DHCP Snooping: descarta DHCP ACK desde puertos untrusted
+  - DAI: valida que MAC+IP correspondan al binding de snooping
+  - DNS over HTTPS desde los endpoints para ignorar la Option 6
+  - GPO Windows: dominio de inicio de sesión fijo, no aceptar dominios via DHCP
+  - MITRE: T1557.003 + T1557.001 (LLMNR si usa Responder)
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Challenge -->
+        <div class="mini-challenge">
+          <div class="challenge-label" data-i18n="ej.challenge">🚨 Mini-Challenge · Resolver el incidente</div>
+          <h3 data-i18n="dhcp.challenge.title">Incidente #DHCP-001: "El WiFi corporativo roba contraseñas"</h3>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;" data-i18n="dhcp.challenge.ctx">
+            Las 11:00. El helpdesk recibe 3 tickets en 15 minutos: usuarios reportan que sus credenciales de la intranet dejaron de funcionar. El SIEM muestra múltiples alertas "Failed login from unknown IP" para esas cuentas. Un usuario dice "me aparece un certificado inválido en la intranet".
+          </p>
+          <pre style="font-size:0.78rem;margin-bottom:1rem;" data-i18n="dhcp.pre8">
+Zeek dhcp.log (último hora):
+  10:45:00  mac=52:54:00:ab:cd:ef  server=192.168.100.50  gateway=192.168.100.50
+  10:45:00  mac=aa:11:22:33:44:55  server=192.168.100.50  gateway=192.168.100.50
+  10:45:01  mac=bb:22:33:44:55:66  server=192.168.100.50  gateway=192.168.100.50
+  (servidor DHCP legítimo = 192.168.100.1)
+
+Zeek http.log:
+  10:46:00  src=192.168.100.105  dst=192.168.100.50  uri=/login POST
+  → Credenciales en claro (HTTP, no HTTPS)</pre>
+          <div class="ejercicio-card" style="border-color:var(--proto-color);margin-top:0;">
+            <div class="ejercicio-header">
+              <span class="ejercicio-number">CHALLENGE</span>
+              <span class="ejercicio-title" data-i18n="dhcp.challenge.q">¿Qué pasó? Timeline, alcance y respuesta completa</span>
+              <span class="ejercicio-difficulty dif-hard" data-i18n="ej.hard">Difícil</span>
+            </div>
+            <div class="ejercicio-body">
+              <button class="respuesta-toggle" data-i18n="btn.showAnswer">🔍 Ver análisis completo</button>
+              <div class="respuesta-box">
+QUÉ PASÓ: Rogue DHCP + SSL Strip MitM
+
+Timeline reconstruido:
+  ~10:44 — Alguien conectó un dispositivo rogue (192.168.100.50) a la red WiFi
+            Probablemente via laptop con hostapd o herramienta similar
+  10:44   — Posible DHCP starvation previo (o rogue más rápido que el legítimo)
+  10:45   — 3 usuarios obtienen DHCP del rogue (gateway=192.168.100.50)
+  10:45+  — Sus dispositivos enrutan TODO el tráfico por 192.168.100.50
+  10:46   — Usuario accede a intranet; el atacante hace SSL strip:
+            HTTPS hacia intranet → el rogue sirve HTTP sin cifrar
+            Usuario ve certificado inválido (el atacante usa HTTP plano o cert self-signed)
+            Si el usuario ignora la advertencia → credenciales capturadas en claro
+  10:46+  — Atacante usa las credenciales capturadas → "Failed login from unknown IP"
+            (el atacante las usó desde otra IP/red)
+
+EVIDENCIAS:
+  → server_addr=192.168.100.50 ≠ DHCP legítimo (192.168.100.1) = rogue confirmado
+  → gateway=192.168.100.50 = tráfico interceptado
+  → POST /login sobre HTTP (no HTTPS) a las 10:46 = credenciales expuestas
+  → "certificado inválido" = SSL strip activo
+
+ALCANCE:
+  3 MACs afectadas: aa:11:22:33:44:55, bb:22:33:44:55:66, 52:54:00:ab:cd:ef
+  → Identificar usuarios de esas MACs en el Active Directory / MDM
+  → Todas las credenciales usadas entre 10:45 y ahora = comprometidas
+
+RESPUESTA INMEDIATA (T+0):
+  1. Localizar 192.168.100.50 en el switch → aislar el puerto
+  2. Deshabilitar el SSID WiFi comprometido (si es WiFi) temporalmente
+  3. Forzar renovación DHCP en los 3 hosts afectados
+  4. Bloquear cuentas comprometidas inmediatamente
+  5. Notificar a los 3 usuarios → cambio de contraseña urgente
+  6. Revisar accesos desde "unknown IP" en el SIEM → qué datos accedieron
+
+RESPUESTA A MEDIO PLAZO:
+  7. Implementar DHCP Snooping en el switch WiFi
+  8. Implementar HTTPS estricto en intranet (HSTS)
+  9. Revisar política de SSID: ¿802.1X o solo WPA2-PSK?
+     WPA2-PSK permite que cualquier dispositivo en el SSID ataque a otros
+     802.1X + certificados previene el rogue en la capa de auth
+  10. MFA en la intranet para limitar el impacto de robo de credenciales
+
+LECCIÓN: Un certificado inválido es siempre una red flag.
+La advertencia del browser "Conexión no segura" es exactamente esto —
+un MitM activo. Capacitar a usuarios para NUNCA ignorarla.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /tab ejercicios -->
+
+    <!-- ── Tab: Recursos ── -->
+    <div class="tab-content" data-tab="recursos">
+
+      <div class="section-title" data-i18n="rec.official">📄 Documentación Oficial</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 2131 — DHCP (1997)</h4>
+          <p data-i18n="dhcp.rec.rfc">Especificación completa del protocolo DHCP: mensajes, opciones, estados del cliente y servidor.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc2131" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc2131</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 2132 — DHCP Options</h4>
+          <p data-i18n="dhcp.rec.rfc2">Opciones DHCP estándar: gateway, DNS, NTP, dominio, NetBIOS, etc. Útil para entender qué puede enviar un rogue DHCP.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc2132" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc2132</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.tools">🛠️ Herramientas SOC</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.attack">Herramienta · Ataque</div>
+          <h4>Yersinia — DHCP Starvation</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="dhcp.pre9"># Solo en entorno de laboratorio controlado
+yersinia dhcp -attack 1  # DHCP starvation
+yersinia dhcp -attack 2  # Rogue DHCP
+
+# Detectar DHCP servers en la red (sin atacar)
+nmap -sU -p 67 --script dhcp-discover 192.168.1.0/24</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.tool.analysis">Herramienta · Análisis</div>
+          <h4>Zeek dhcp.log — consultas</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;" data-i18n="dhcp.pre10"># Encontrar servidores DHCP no autorizados
+zeek-cut server_addr < dhcp.log | sort | uniq -c | sort -rn
+
+# Hosts con gateway sospechoso
+zeek-cut mac assigned_ip gateway < dhcp.log \
+  | awk '$3 != "192.168.1.1"'
+
+# Starvation: muchas MACs del mismo OUI
+zeek-cut ts mac < dhcp.log \
+  | awk '{print substr($2,1,8)}' | sort | uniq -c | sort -rn</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.defense">Defensa</div>
+          <h4>DHCP Snooping — Cisco / HP / Juniper</h4>
+          <pre style="font-size:0.78rem;margin-top:0.5rem;">Cisco IOS:   ip dhcp snooping
+HP ProCurve: dhcp-snooping
+Juniper EX:  set vlans VLAN10 forwarding-options helpers dhcp-snooping
+             set ethernet-switching-options secure-access-port
+             interface ge-0/0/0.0 dhcp-trusted</pre>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type" data-i18n="rec.type.reference">Referencia</div>
+          <h4>MITRE ATT&CK — T1557.003</h4>
+          <p data-i18n="dhcp.rec.mitre1">DHCP Spoofing como técnica AitM. Casos reales, mitigaciones y detecciones documentadas.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1557/003/" target="_blank" rel="noopener">→ attack.mitre.org/T1557/003</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="rec.cheatsheet">📋 Cheatsheet DHCP para SOC</div>
+      <div class="cheatsheet-table-wrap">
+        <table class="cheatsheet-table">
+          <thead>
+            <tr><th data-i18n="dhcp.cheat.h1">Señal en logs</th><th data-i18n="dhcp.cheat.h2">Posible ataque</th><th data-i18n="dhcp.cheat.h3">Acción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="dhcp.cheat.r1a">Muchos DISCOVER con MACs del mismo OUI secuenciales</td><td>DHCP Starvation</td><td data-i18n="dhcp.cheat.r1c">Aislar puerto, rate limit</td></tr>
+            <tr><td data-i18n="dhcp.cheat.r2a">server_addr en dhcp.log distinto al DHCP legítimo</td><td>Rogue DHCP Server</td><td data-i18n="dhcp.cheat.r2c">Aislar puerto, forzar renovación en afectados</td></tr>
+            <tr><td data-i18n="dhcp.cheat.r3a">Gateway en lease distinto al esperado</td><td data-i18n="dhcp.cheat.r3b">Rogue DHCP / MitM activo</td><td data-i18n="dhcp.cheat.r3c">Revisar tráfico de hosts afectados</td></tr>
+            <tr><td data-i18n="dhcp.cheat.r4a">Clientes sin IP (DISCOVER sin OFFER)</td><td data-i18n="dhcp.cheat.r4b">Pool agotado (post-starvation)</td><td data-i18n="dhcp.cheat.r4c">Buscar MACs falsas, limpiar bindings</td></tr>
+            <tr><td data-i18n="dhcp.cheat.r5a">DNS Option 6 apuntando a IP interna no autorizada</td><td>DHCP Option Spoofing</td><td data-i18n="dhcp.cheat.r5c">DHCP Snooping, verificar resolución DNS</td></tr>
+            <tr><td data-i18n="dhcp.cheat.r6a">Lease time menor a 300s en algunos hosts</td><td data-i18n="dhcp.cheat.r6b">Rogue DHCP manteniendo control frecuente</td><td data-i18n="dhcp.cheat.r6c">Auditar servidor DHCP de origen</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title mt-3" data-i18n="dhcp.rec.cvestitle">🔒 CVEs Relevantes</div>
+      <div class="recursos-grid mb-3">
+        <div class="recurso-card">
+          <div class="recurso-type">CVE</div>
+          <h4>CVE-2018-1111 — dhclient RCE (RHEL/CentOS)</h4>
+          <p data-i18n="dhcp.rec.cve1">NetworkManager en RHEL 6/7 ejecutaba código arbitrario vía un script del hook de dhclient al recibir opciones DHCP maliciosas. CVSS 7.5. Un rogue DHCP podía comprometer hosts Linux al renovar lease.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2018-1111" target="_blank" rel="noopener">→ nvd.nist.gov/CVE-2018-1111</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">CVE</div>
+          <h4>CVE-2019-0547 — Windows DHCP Server RCE</h4>
+          <p data-i18n="dhcp.rec.cve2">Vulnerabilidad de ejecución remota de código en el servidor DHCP de Windows Server 2019. Un atacante sin autenticación podía ejecutar código arbitrario enviando paquetes DHCP especialmente diseñados. CVSS 9.8.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2019-0547" target="_blank" rel="noopener">→ nvd.nist.gov/CVE-2019-0547</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">CVE</div>
+          <h4>CVE-2011-0997 — ISC dhclient script injection</h4>
+          <p data-i18n="dhcp.rec.cve3">El cliente DHCP de ISC (usado en Debian/Ubuntu) no sanitizaba el nombre de host enviado por el servidor DHCP. Un rogue DHCP podía inyectar comandos shell en el script de actualización del hostname.</p>
+          <a class="recurso-link" href="https://nvd.nist.gov/vuln/detail/CVE-2011-0997" target="_blank" rel="noopener">→ nvd.nist.gov/CVE-2011-0997</a>
+        </div>
+      </div>
+
+      <div class="section-title" data-i18n="dhcp.rec.labstitle">🎯 Labs y Referencias</div>
+      <div class="recursos-grid">
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1557.003 — DHCP Spoofing</h4>
+          <p data-i18n="dhcp.rec.mitre2">Técnica AitM via DHCP. Casos reales, detecciones, mitigaciones.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1557/003/" target="_blank" rel="noopener">→ attack.mitre.org/T1557/003</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">MITRE ATT&CK</div>
+          <h4>T1498 — Network DoS (Starvation)</h4>
+          <p data-i18n="dhcp.rec.mitre3">DHCP Starvation como técnica de denegación de servicio de red.</p>
+          <a class="recurso-link" href="https://attack.mitre.org/techniques/T1498/" target="_blank" rel="noopener">→ attack.mitre.org/T1498</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">Zeek</div>
+          <h4>Zeek DHCP log reference</h4>
+          <p data-i18n="dhcp.rec.zeek">Campos del dhcp.log: ts, mac, assigned_ip, lease_time, trans_id, server_addr, gateway, dns, host_name, domain.</p>
+          <a class="recurso-link" href="https://docs.zeek.org/en/master/logs/dhcp.html" target="_blank" rel="noopener">→ docs.zeek.org/en/master/logs/dhcp.html</a>
+        </div>
+        <div class="recurso-card">
+          <div class="recurso-type">RFC</div>
+          <h4>RFC 3046 — DHCP Relay Agent Information (Option 82)</h4>
+          <p data-i18n="dhcp.rec.opt82">Option 82 permite al relay agent añadir información de puerto/VLAN. Base técnica del DHCP Snooping en switches gestionados.</p>
+          <a class="recurso-link" href="https://www.rfc-editor.org/rfc/rfc3046" target="_blank" rel="noopener">→ rfc-editor.org/rfc/rfc3046</a>
+        </div>
+      </div>
+
+    </div><!-- /tab recursos -->
+
+  </main>
+
+  <script src="../theme-switcher.js"></script>
+  <script src="../i18n-core.js"></script>
+  <script src="../i18n-dhcp.js"></script>
+  <script src="../shared.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      SOC.initSlides('dhcp-slides');
+      SOC.initEjercicios();
+      SOC.saveProgress('dhcp', 'demo');
+    });
+  </script>
+
+</body>
+</html>
