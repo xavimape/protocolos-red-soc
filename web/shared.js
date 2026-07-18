@@ -5,7 +5,7 @@
 
 'use strict';
 
-// ── Google Analytics (carga directa, sin aviso de cookies) ────
+// ── Google Analytics (carga solo si el usuario aceptó cookies) ─
 function loadAnalytics() {
   if (window._gaLoaded) return;
   window._gaLoaded = true;
@@ -19,7 +19,58 @@ function loadAnalytics() {
   gtag('js', new Date());
   gtag('config', 'G-ESGBTFHKTK', { anonymize_ip: true });
 }
-loadAnalytics();
+
+// ── Cookie consent notice (tarjeta chica, no bloqueante) ─────
+(function() {
+  var CONSENT_KEY = 'soc_cookie_consent';
+  function getConsent() { return localStorage.getItem(CONSENT_KEY); }
+  function setConsent(value) {
+    localStorage.setItem(CONSENT_KEY, value);
+    var banner = document.getElementById('cookie-banner');
+    if (banner) banner.remove();
+    if (value === 'accepted') loadAnalytics();
+  }
+  if (getConsent() === 'accepted') { loadAnalytics(); return; }
+  if (getConsent() === 'rejected') return;
+  function showBanner() {
+    var isEN = (typeof i18n !== 'undefined') ? i18n.getLang() === 'en' : false;
+    var banner = document.createElement('div');
+    banner.id = 'cookie-banner';
+    banner.setAttribute('role', 'region');
+    banner.setAttribute('aria-label', isEN ? 'Cookie notice' : 'Aviso de cookies');
+    banner.innerHTML = isEN
+      ? '<span class="cookie-text">This site uses Google Analytics to measure audience. No personal data is stored. '
+        + 'Under Argentine Law 25,326 and GDPR you may decline. '
+        + '<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy policy</a></span>'
+        + '<div class="cookie-actions">'
+        + '<button id="cookie-reject" class="cookie-btn cookie-btn-sec">Decline</button>'
+        + '<button id="cookie-accept" class="cookie-btn cookie-btn-pri">Accept</button>'
+        + '</div>'
+      : '<span class="cookie-text">Este sitio usa Google Analytics para medir la audiencia. No se almacenan datos personales. '
+        + 'Conforme a la Ley 25.326 (Argentina) y el RGPD podes rechazar. '
+        + '<a href="https://policies.google.com/privacy?hl=es" target="_blank" rel="noopener">Politica de privacidad</a></span>'
+        + '<div class="cookie-actions">'
+        + '<button id="cookie-reject" class="cookie-btn cookie-btn-sec">Rechazar</button>'
+        + '<button id="cookie-accept" class="cookie-btn cookie-btn-pri">Aceptar</button>'
+        + '</div>';
+    document.body.appendChild(banner);
+    // Entrada suave (evita el "salto" de aparecer de golpe)
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { banner.classList.add('cookie-visible'); });
+    });
+    document.getElementById('cookie-accept').addEventListener('click', function() { setConsent('accepted'); });
+    document.getElementById('cookie-reject').addEventListener('click', function() { setConsent('rejected'); });
+  }
+  function init() {
+    // Pequeña demora: no compite con el resto del contenido en el primer render
+    setTimeout(showBanner, 900);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
 
 // ── Configuracion de protocolos ──────────────────────────────
 const PROTOCOLS = {
