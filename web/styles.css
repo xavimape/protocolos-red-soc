@@ -803,7 +803,7 @@ main { flex: 1; }
   font-size: 0.82rem;
   color: var(--success);
   margin: 1.25rem 0;
-  text-align: center;
+  text-align: left;
   line-height: 1.8;
   white-space: pre-line;
 }
