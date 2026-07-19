@@ -805,6 +805,7 @@ main { flex: 1; }
   margin: 1.25rem 0;
   text-align: center;
   line-height: 1.8;
+  white-space: pre-line;
 }
 
 /* Nav de slides */
